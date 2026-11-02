@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="A fast, private, browser-based code editor with tabs, diff and syntax highlighting for Verilog, SystemVerilog, VHDL and 60+ languages." />
+    <meta name="theme-color" content="#f3f3f3" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <title>Syntax</title>
+    <script>
+      // Pick the initial chrome colors before CSS loads, to avoid a flash of the wrong theme.
+      try {
+        var s = JSON.parse(localStorage.getItem('syntax.settings.v1') || '{}');
+        var dark = s.mode === 'dark' || ((!s.mode || s.mode === 'system') && matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="app">
+      <header id="menubar" aria-label="Main menu"></header>
+      <div id="toolbar" role="toolbar" aria-label="Toolbar"></div>
+      <nav id="tabbar" aria-label="Open files"></nav>
+      <main id="workspace">
+        <div id="editor-host"></div>
+        <section id="diff-pane" aria-label="Compare">
+          <div id="diff-toolbar"></div>
+          <div id="diff-host"></div>
+        </section>
+        <div id="welcome">
+          <div class="welcome-card">
+            <div class="welcome-icon codicon codicon-files" aria-hidden="true"></div>
+            <h1>Drop files here to start</h1>
+            <p>Drag files or whole folders anywhere onto this window. They open as tabs, and nothing is uploaded.</p>
+            <div class="welcome-actions">
+              <button id="welcome-open" class="primary">Open Files…</button>
+              <button id="welcome-new">New File</button>
+            </div>
+            <p class="welcome-hint">Verilog · SystemVerilog · VHDL · Tcl/XDC · C/C++ · Python · JS/TS · Java · Go · Rust · and 50+ more</p>
+          </div>
+        </div>
+      </main>
+      <footer id="statusbar"></footer>
+    </div>
+    <div id="drop-overlay"><div class="drop-message"><span class="codicon codicon-cloud-upload" aria-hidden="true"></span>Drop to open</div></div>
+    <div id="modal-root"></div>
+    <div id="toast-root" aria-live="polite"></div>
+    <input type="file" id="file-input" multiple hidden />
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
