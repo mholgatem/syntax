@@ -465,6 +465,14 @@ const topV = `module top (input clk, output reg [7:0] q);\n  wire [7:0] s;\n  ad
 const adderV = `module adder #(parameter W = 8) (\n  input  [W-1:0] a,\n  input  [W-1:0] b,\n  output [W-1:0] y\n);\n  assign y = a + b;\nendmodule\n`;
 await nf.setInputFiles('#file-input', [file('adder.v', adderV), file('top.v', topV)]);
 await nf.waitForSelector('.tab.active:has-text("top.v")');
+const paneWidths = () =>
+  nf.evaluate(() => ({
+    workspace: document.getElementById('workspace').getBoundingClientRect().width,
+    left: document.getElementById('pane-0').getBoundingClientRect().width,
+    right: document.getElementById('pane-1').getBoundingClientRect().width,
+  }));
+const w1 = await paneWidths();
+check(Math.abs(w1.left - w1.workspace) < 2, `a single view fills the workspace (${Math.round(w1.left)} of ${Math.round(w1.workspace)}px)`);
 const nfLines = (host = '#editor-host') =>
   nf.$$eval(`${host} .view-line`, (els) =>
     els
@@ -588,6 +596,8 @@ await nf.click('.tab:has-text("top.v")', { button: 'right' });
 await nf.click('.menu-popup .menu-item:has(.menu-label:text-is("Clone to Other View"))');
 await nf.waitForSelector('body.split #tabbar-2 .tab:has-text("top.v")');
 check(true, 'Clone to Other View opens the second view');
+const w2 = await paneWidths();
+check(Math.abs(w2.left - w2.right) < 4 && w2.left > w2.workspace * 0.4, `split views share the width evenly (${Math.round(w2.left)} / ${Math.round(w2.right)}px)`);
 await nf.click('#editor-host-2 .view-line >> nth=0');
 await nf.keyboard.press('Control+Home');
 await nf.keyboard.type('// split edit\n');
