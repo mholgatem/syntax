@@ -20,26 +20,52 @@
     <div id="app">
       <header id="menubar" aria-label="Main menu"></header>
       <div id="toolbar" role="toolbar" aria-label="Toolbar"></div>
-      <nav id="tabbar" aria-label="Open files"></nav>
-      <main id="workspace">
-        <div id="editor-host"></div>
-        <section id="diff-pane" aria-label="Compare">
-          <div id="diff-toolbar"></div>
-          <div id="diff-host"></div>
-        </section>
-        <div id="welcome">
-          <div class="welcome-card">
-            <div class="welcome-icon codicon codicon-files" aria-hidden="true"></div>
-            <h1>Drop files here to start</h1>
-            <p>Drag files or whole folders anywhere onto this window. They open as tabs, and nothing is uploaded.</p>
-            <div class="welcome-actions">
-              <button id="welcome-open" class="primary">Open Files…</button>
-              <button id="welcome-new">New File</button>
-            </div>
-            <p class="welcome-hint">Verilog · SystemVerilog · VHDL · Tcl/XDC · C/C++ · Python · JS/TS · Java · Go · Rust · and 50+ more</p>
+      <div id="main-area">
+        <main id="workspace">
+          <div id="panes">
+            <section class="pane" id="pane-0" aria-label="Left view">
+              <nav class="tabbar" id="tabbar" aria-label="Open files"></nav>
+              <div class="pane-body">
+                <div class="editor-host" id="editor-host"></div>
+                <section id="diff-pane" aria-label="Compare">
+                  <div id="diff-toolbar"></div>
+                  <div id="diff-host"></div>
+                </section>
+              </div>
+            </section>
+            <div id="pane-divider" role="separator" aria-orientation="vertical" aria-label="Resize views" title="Drag to resize"></div>
+            <section class="pane" id="pane-1" aria-label="Right view">
+              <nav class="tabbar" id="tabbar-2" aria-label="Open files (right view)"></nav>
+              <div class="pane-body">
+                <div class="editor-host" id="editor-host-2"></div>
+              </div>
+            </section>
           </div>
-        </div>
-      </main>
+          <div id="welcome">
+            <div class="welcome-card">
+              <div class="welcome-icon codicon codicon-files" aria-hidden="true"></div>
+              <h1>Drop files here to start</h1>
+              <p>Drag files or whole folders anywhere onto this window. They open as tabs, and nothing is uploaded.</p>
+              <div class="welcome-actions">
+                <button id="welcome-open" class="primary">Open Files…</button>
+                <button id="welcome-new">New File</button>
+              </div>
+              <p class="welcome-hint">Verilog · SystemVerilog · VHDL · Tcl/XDC · C/C++ · Python · JS/TS · Java · Go · Rust · and 50+ more</p>
+            </div>
+          </div>
+        </main>
+        <div id="sidebar-resizer" role="separator" aria-orientation="vertical" aria-label="Resize side panel"></div>
+        <aside id="sidebar" aria-label="Side panel">
+          <div class="sidebar-head" role="tablist">
+            <button class="sidebar-tab" role="tab" data-tab="outline"><span class="codicon codicon-list-tree" aria-hidden="true"></span>Outline</button>
+            <button class="sidebar-tab" role="tab" data-tab="search"><span class="codicon codicon-search" aria-hidden="true"></span>Search</button>
+            <span class="sidebar-spacer"></span>
+            <button class="sidebar-close codicon codicon-close" title="Close panel" aria-label="Close panel"></button>
+          </div>
+          <div class="sidebar-panel" id="outline-panel" data-tab="outline" role="tabpanel"></div>
+          <div class="sidebar-panel" id="search-panel" data-tab="search" role="tabpanel"></div>
+        </aside>
+      </div>
       <footer id="statusbar"></footer>
     </div>
     <div id="drop-overlay"><div class="drop-message"><span class="codicon codicon-cloud-upload" aria-hidden="true"></span>Drop to open</div></div>

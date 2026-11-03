@@ -161,6 +161,62 @@ export function promptText(title: string, label: string, initial: string): Promi
 export interface PickOption {
   value: string;
   label: string;
+  /** Extra text shown after the label (e.g. the file it comes from). */
+  hint?: string;
+}
+
+/** Ask the user to choose one option from a filterable list. */
+export function pickOne(title: string, options: PickOption[], okLabel = 'OK'): Promise<string | null> {
+  const body = document.createElement('div');
+  body.className = 'pick-one';
+  const filter = document.createElement('input');
+  filter.type = 'text';
+  filter.placeholder = 'Type to filter';
+  filter.spellcheck = false;
+  filter.setAttribute('aria-label', 'Filter');
+  const list = document.createElement('select');
+  list.size = Math.min(12, Math.max(4, options.length));
+  list.setAttribute('aria-label', title);
+  const fill = () => {
+    const q = filter.value.trim().toLowerCase();
+    list.replaceChildren(
+      ...options
+        .filter((o) => !q || `${o.label} ${o.hint ?? ''}`.toLowerCase().includes(q))
+        .map((o) => {
+          const opt = document.createElement('option');
+          opt.value = o.value;
+          opt.textContent = o.hint ? `${o.label}  —  ${o.hint}` : o.label;
+          return opt;
+        }),
+    );
+    list.selectedIndex = list.options.length ? 0 : -1;
+  };
+  filter.addEventListener('input', fill);
+  filter.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const n = list.options.length;
+      if (n) list.selectedIndex = (list.selectedIndex + (e.key === 'ArrowDown' ? 1 : n - 1)) % n;
+    }
+  });
+  fill();
+  body.append(filter, list);
+  return openModal<string | null>({
+    title,
+    body,
+    cancelValue: null,
+    buttons: [
+      { label: okLabel, value: null, primary: true },
+      { label: 'Cancel', value: null },
+    ],
+    resolvePrimary: () => list.value || null,
+    onOpen: (dialog) => {
+      filter.focus();
+      list.addEventListener('dblclick', () => {
+        (dialog.querySelector('button.primary') as HTMLButtonElement | null)?.click();
+      });
+    },
+  });
 }
 
 /** Ask the user for two files to compare. */
@@ -208,15 +264,30 @@ export function showInfo(title: string, body: HTMLElement | string): Promise<voi
   });
 }
 
-export function toast(message: string, kind: 'info' | 'error' = 'info'): void {
+export function toast(
+  message: string,
+  kind: 'info' | 'error' = 'info',
+  action?: { label: string; run: () => void; sticky?: boolean },
+): void {
   const root = document.getElementById('toast-root')!;
   const el = document.createElement('div');
   el.className = `toast ${kind}`;
   el.setAttribute('role', kind === 'error' ? 'alert' : 'status');
   el.textContent = message;
-  root.append(el);
-  window.setTimeout(() => {
+  const dismiss = () => {
     el.classList.add('leaving');
     window.setTimeout(() => el.remove(), 300);
-  }, 3500);
+  };
+  if (action) {
+    const btn = document.createElement('button');
+    btn.className = 'toast-action';
+    btn.textContent = action.label;
+    btn.addEventListener('click', () => {
+      dismiss();
+      action.run();
+    });
+    el.append(btn);
+  }
+  root.append(el);
+  if (!action?.sticky) window.setTimeout(dismiss, action ? 8000 : 3500);
 }
