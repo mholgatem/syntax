@@ -351,6 +351,77 @@ check(
     (JSON.stringify(partial) === JSON.stringify(expectedPartial) ? '' : `\n   want: ${expectedPartial.join(' ')}\n   got:  ${partial.join(' ')}`),
 );
 
+// Unsaved-changes dot: cancel a save, then save for real, then edit again.
+// The native save picker is stubbed: the first call is cancelled, later calls succeed.
+const sp = await context.newPage();
+sp.on('pageerror', (e) => errors.push(String(e)));
+await sp.addInitScript(() => {
+  let calls = 0;
+  window.showSaveFilePicker = async (opts) => {
+    if (++calls === 1) throw new DOMException('The user aborted a request.', 'AbortError');
+    return {
+      kind: 'file',
+      name: opts.suggestedName,
+      queryPermission: async () => 'granted',
+      requestPermission: async () => 'granted',
+      createWritable: async () => ({ write: async () => {}, close: async () => {} }),
+      isSameEntry: async () => false,
+    };
+  };
+});
+await sp.goto(url);
+await sp.waitForSelector('body.ready');
+await sp.setInputFiles('#file-input', [file('dirty.v', 'module d;\nendmodule\n')]);
+await sp.waitForSelector('.tab.active:has-text("dirty.v")');
+const isDirtyTab = () => sp.locator('.tab.active').evaluate((t) => t.classList.contains('dirty'));
+await sp.click('#editor-host .view-line >> nth=0');
+await sp.keyboard.press('End');
+await sp.keyboard.type(' x');
+await sp.keyboard.press('Control+s');
+await sp.waitForTimeout(300);
+check(await isDirtyTab(), 'cancelling Save leaves the tab marked unsaved');
+await sp.keyboard.press('Control+s');
+await sp.waitForTimeout(300);
+check(!(await isDirtyTab()), 'saving clears the unsaved marker');
+await sp.keyboard.type('y');
+await sp.waitForTimeout(100);
+check(await isDirtyTab(), 'editing after a save marks the tab unsaved again');
+await sp.keyboard.press('Control+z');
+await sp.waitForTimeout(100);
+check(!(await isDirtyTab()), 'undoing back to the saved text clears it again');
+
+// Download fallback (Brave, Firefox, Safari, or plain http): no File System Access API, so
+// Save downloads the file. The page can't see whether the browser's own save dialog was
+// cancelled, so saving always clears the marker; later edits must bring it back.
+const fb = await context.newPage();
+fb.on('pageerror', (e) => errors.push(String(e)));
+await fb.addInitScript(() => {
+  delete window.showSaveFilePicker;
+  delete window.showOpenFilePicker;
+});
+await fb.goto(url);
+await fb.waitForSelector('body.ready');
+await fb.setInputFiles('#file-input', [file('fallback.v', 'module f;\nendmodule\n')]);
+await fb.waitForSelector('.tab.active:has-text("fallback.v")');
+const fbDirty = () => fb.locator('.tab.active').evaluate((t) => t.classList.contains('dirty'));
+await fb.click('#editor-host .view-line >> nth=0');
+await fb.keyboard.press('End');
+await fb.keyboard.type(' x');
+check(await fbDirty(), 'fallback: editing marks the tab unsaved');
+const [fbDownload] = await Promise.all([fb.waitForEvent('download'), fb.keyboard.press('Control+s')]);
+await fb.waitForTimeout(100);
+check(fbDownload.suggestedFilename() === 'fallback.v', 'fallback: Ctrl+S downloads the file');
+check(!(await fbDirty()), 'fallback: saving clears the unsaved marker');
+await fb.keyboard.type('y');
+await fb.waitForTimeout(100);
+check(await fbDirty(), 'fallback: editing after saving marks the tab unsaved again');
+await Promise.all([fb.waitForEvent('download'), fb.keyboard.press('Control+s')]);
+await fb.waitForTimeout(100);
+check(!(await fbDirty()), 'fallback: saving again clears it again');
+await fb.keyboard.type('z');
+await fb.waitForTimeout(100);
+check(await fbDirty(), 'fallback: and the next edit marks it unsaved again');
+
 const realErrors = errors.filter((e) => !/favicon/.test(e));
 check(realErrors.length === 0, `no console errors${realErrors.length ? ': ' + realErrors.join(' | ') : ''}`);
 

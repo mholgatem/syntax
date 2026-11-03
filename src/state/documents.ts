@@ -57,7 +57,13 @@ class DocStore {
     return () => this.contentListeners.delete(l);
   }
 
+  /** Dirty state as of the last emit, so text edits only re-render when it actually flips. */
+  private notifiedDirty = new WeakMap<Doc, boolean>();
+
   emit(): void {
+    // Record what listeners are about to see. Every state change (save, encoding, EOL,
+    // rename, ...) goes through here, so the per-edit check below can't go stale.
+    for (const d of this.docs) this.notifiedDirty.set(d, this.isDirty(d));
     for (const l of this.listeners) l();
   }
 
@@ -92,14 +98,9 @@ class DocStore {
       languageLocked: opts.languageLocked ?? false,
       viewState: opts.viewState ?? null,
     };
-    let wasDirty = this.isDirty(doc);
     model.onDidChangeContent(() => {
       for (const l of this.contentListeners) l(doc);
-      const dirty = this.isDirty(doc);
-      if (dirty !== wasDirty) {
-        wasDirty = dirty;
-        this.emit();
-      }
+      if (this.isDirty(doc) !== this.notifiedDirty.get(doc)) this.emit();
     });
     this.docs.push(doc);
     this.emit();
@@ -123,6 +124,9 @@ class DocStore {
   }
 
   markSaved(doc: Doc): void {
+    // Close the current undo group so that undo can stop exactly at the saved state
+    // (otherwise typing just before and after a save merges into one undo step).
+    doc.model.pushStackElement();
     doc.savedVersionId = doc.model.getAlternativeVersionId();
     doc.savedHash = hashText(doc.model.getValue());
     doc.metaDirty = false;
