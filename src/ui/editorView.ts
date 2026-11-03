@@ -1,6 +1,7 @@
 import { monaco } from '../editor/monacoSetup';
 import { store, type Doc } from '../state/documents';
 import { settings, type Settings } from '../state/settings';
+import { installRichCopy } from '../editor/richCopy';
 
 // One code editor instance shared by every tab (each tab owns a model, and so its own
 // undo stack), plus one diff editor used for Compare.
@@ -66,6 +67,8 @@ export function initEditors(editorHost: HTMLElement, diffHost: HTMLElement): voi
       ignoreTrimWhitespace: next.diffIgnoreWhitespace,
     });
   });
+
+  installRichCopy(focusedEditor);
 
   store.subscribe(sync);
   sync();

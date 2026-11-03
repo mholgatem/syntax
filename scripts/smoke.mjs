@@ -13,7 +13,11 @@ if (shots) mkdirSync(shots, { recursive: true });
 
 const CHROME = process.env.CHROME_PATH ?? 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const browser = await chromium.launch({ executablePath: CHROME, headless: true });
-const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, acceptDownloads: true });
+const context = await browser.newContext({
+  viewport: { width: 1280, height: 800 },
+  acceptDownloads: true,
+  permissions: ['clipboard-read', 'clipboard-write'],
+});
 const page = await context.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -233,6 +237,119 @@ await mobile.waitForSelector('body.ready');
 const overflow = await mobile.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
 check(overflow <= 0, 'no horizontal page scroll at phone width');
 if (shots) await mobile.screenshot({ path: join(shots, '06-mobile.png') });
+
+// Copy keeps syntax colors on every line, even in a large file that hasn't finished
+// background tokenization (pasting into Google Docs / Word uses this HTML).
+const cp = await context.newPage();
+cp.on('pageerror', (e) => errors.push(String(e)));
+await cp.goto(url);
+await cp.waitForSelector('body.ready');
+let big = '';
+for (let i = 0; i < 400; i++) big += `// block ${i}\nmodule m${i} (input wire clk, output reg q);\n  always @(posedge clk) q <= ~q;\nendmodule\n\n`;
+await cp.setInputFiles('#file-input', [file('big.sv', big)]);
+await cp.waitForSelector('.tab.active:has-text("big.sv")');
+await cp.click('#editor-host .view-line >> nth=0');
+await cp.keyboard.press('Control+a');
+await cp.keyboard.press('Control+c');
+await cp.waitForTimeout(200);
+const copiedHtml = await cp.evaluate(async () => {
+  for (const it of await navigator.clipboard.read())
+    if (it.types.includes('text/html')) return (await it.getType('text/html')).text();
+  return '';
+});
+// Every copied line containing "module" must color that word (keyword or bracket-pair color),
+// not leave it in the default text color.
+const moduleLineStats = await cp.evaluate((html) => {
+  const root = new DOMParser().parseFromString(html, 'text/html').body.firstElementChild;
+  const base = root.style.color;
+  const lines = [...root.children].filter((l) => l.textContent.includes('module'));
+  const uncolored = lines.filter(
+    (l) => ![...l.querySelectorAll('span')].some((s) => s.textContent.includes('module') && s.style.color !== base),
+  );
+  return { total: lines.length, uncolored: uncolored.length };
+}, copiedHtml);
+const moduleLines = { length: moduleLineStats.total };
+const uncoloredLines = { length: moduleLineStats.uncolored };
+check(
+  moduleLines.length === 800 && uncoloredLines.length === 0,
+  `copied HTML keeps colors on every line (${moduleLines.length} lines, ${uncoloredLines.length} uncolored)`,
+);
+
+// Bracket pair colors are copied too, matching what the editor shows (tabs + nesting + unicode).
+const bracketSrc = 'module b;\n\tassign y = ((a & b) | {c, d[3:0]}); // é ( in comment\n\tinitial begin if ((x)) $display("[%0d]", f(g(1))); end\nendmodule\n';
+await cp.setInputFiles('#file-input', [file('brackets.sv', bracketSrc)]);
+await cp.waitForSelector('.tab.active:has-text("brackets.sv")');
+await cp.waitForTimeout(300);
+const rendered = await cp.evaluate(() =>
+  [...document.querySelectorAll('#editor-host .view-line')]
+    .sort((a, b) => parseFloat(a.style.top) - parseFloat(b.style.top))
+    .flatMap((line) =>
+      [...line.querySelectorAll('span[class*="bracket-highlighting"]')].map((s) => {
+        const [r, g, b] = getComputedStyle(s).color.match(/\d+/g).map(Number);
+        return s.textContent + '#' + [r, g, b].map((n) => n.toString(16).padStart(2, '0')).join('');
+      }),
+    ),
+);
+await cp.click('#editor-host .view-line >> nth=0');
+await cp.keyboard.press('Control+a');
+await cp.keyboard.press('Control+c');
+await cp.waitForTimeout(200);
+const bracketHtml = await cp.evaluate(async () => {
+  for (const it of await navigator.clipboard.read())
+    if (it.types.includes('text/html')) return (await it.getType('text/html')).text();
+  return '';
+});
+const copied = await cp.evaluate((html) => {
+  const root = new DOMParser().parseFromString(html, 'text/html').body;
+  const out = [];
+  for (const span of root.querySelectorAll('span')) {
+    const color = span.style.color.match(/\d+/g)?.map((n) => Number(n).toString(16).padStart(2, '0')).join('');
+    const t = span.textContent.trim();
+    // SystemVerilog also treats module/endmodule and begin/end as bracket pairs.
+    if (['module', 'endmodule', 'begin', 'end'].includes(t)) out.push({ ch: t, color: '#' + color, span: t });
+    else for (const ch of span.textContent) if ('()[]{}'.includes(ch)) out.push({ ch, color: '#' + color, span: span.textContent });
+  }
+  return out;
+}, bracketHtml);
+// Brackets inside strings/comments aren't colorized by the editor, so compare only code brackets.
+const copiedCode = copied.filter((c) => !c.span.includes('in comment') && !c.span.includes('%0d'));
+const copiedSig = copiedCode.map((c) => c.ch + c.color);
+check(
+  rendered.length > 10 && JSON.stringify(copiedSig) === JSON.stringify(rendered),
+  `copied bracket colors match the editor (${rendered.length} brackets)` +
+    (JSON.stringify(copiedSig) === JSON.stringify(rendered) ? '' : `\n   editor: ${rendered.join(' ')}\n   copied: ${copiedSig.join(' ')}`),
+);
+check(new Set(rendered.map((r) => r.slice(1))).size >= 3, 'at least 3 nesting colors in use');
+check(bracketHtml.includes('// é ( in comment'), 'copied text is unchanged by bracket recoloring');
+
+// Partial selection starting mid-line (after a tab): line 2 from "assign" to the end of line 3.
+await cp.keyboard.press('Control+Home');
+await cp.keyboard.press('ArrowDown');
+await cp.keyboard.press('Home'); // first non-whitespace character, i.e. after the tab
+await cp.keyboard.press('Shift+ArrowDown');
+await cp.keyboard.press('Shift+End');
+await cp.keyboard.press('Control+c');
+await cp.waitForTimeout(200);
+const partial = await cp.evaluate(async () => {
+  let html = '';
+  for (const it of await navigator.clipboard.read())
+    if (it.types.includes('text/html')) html = await (await it.getType('text/html')).text();
+  const root = new DOMParser().parseFromString(html, 'text/html').body;
+  const out = [];
+  for (const span of root.querySelectorAll('span')) {
+    const t = span.textContent.trim();
+    const color = '#' + span.style.color.match(/\d+/g).map((n) => Number(n).toString(16).padStart(2, '0')).join('');
+    if (['begin', 'end'].includes(t)) out.push(t + color);
+    else if (!/%0d|comment/.test(span.textContent)) for (const ch of span.textContent) if ('()[]{}'.includes(ch)) out.push(ch + color);
+  }
+  return out;
+});
+const expectedPartial = rendered.slice(1, rendered.length - 1); // all but module / endmodule
+check(
+  JSON.stringify(partial) === JSON.stringify(expectedPartial),
+  'partial selection after a tab keeps the right bracket colors' +
+    (JSON.stringify(partial) === JSON.stringify(expectedPartial) ? '' : `\n   want: ${expectedPartial.join(' ')}\n   got:  ${partial.join(' ')}`),
+);
 
 const realErrors = errors.filter((e) => !/favicon/.test(e));
 check(realErrors.length === 0, `no console errors${realErrors.length ? ': ' + realErrors.join(' | ') : ''}`);
