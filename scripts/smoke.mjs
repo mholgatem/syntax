@@ -428,10 +428,10 @@ wc.on('pageerror', (e) => errors.push(String(e)));
 await wc.goto(url);
 await wc.waitForSelector('body.ready');
 const wcSrc =
-  'module wc;\n  // zebracomment zebrashared\n  /* zebrablock */\n  wire zebrawire;\n  wire zebrashared;\nendmodule\n';
+  'module wc;\n  // zebracomment zebrashared\n  /* zebrablock */\n  wire zebrawire;\n  wire zebrashared;\n  initial $display("zebrastring");\nendmodule\n';
 await wc.setInputFiles('#file-input', [file('wc.sv', wcSrc)]);
 await wc.waitForSelector('.tab.active:has-text("wc.sv")');
-await wc.click('#editor-host .view-line >> nth=5'); // the "endmodule" line
+await wc.click('#editor-host .view-line >> nth=6'); // the "endmodule" line
 await wc.keyboard.press('Home');
 await wc.keyboard.type('zebr');
 await wc.keyboard.press('Control+Space');
@@ -445,8 +445,8 @@ check(
   `completion offers code words (${suggested.join(', ')})`,
 );
 check(
-  !suggested.includes('zebracomment') && !suggested.includes('zebrablock'),
-  'completion skips words that only appear in comments',
+  !suggested.includes('zebracomment') && !suggested.includes('zebrablock') && !suggested.includes('zebrastring'),
+  'completion skips words that only appear in comments or strings',
 );
 await wc.keyboard.press('Escape');
 

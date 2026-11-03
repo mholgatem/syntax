@@ -70,3 +70,7 @@ scripts/smoke.mjs        browser smoke test
 `.github/workflows/deploy.yml` tests, builds and publishes to GitHub Pages on every push to `main`.
 Before the first deploy, turn Pages on once: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
 The site is then served at `https://<user>.github.io/<repo>/`. The base path comes from the repository name automatically.
+
+The source must be **GitHub Actions**, not "Deploy from a branch". With a branch source, GitHub's built-in
+"pages build and deployment" workflow also publishes the raw, unbuilt repo, which loads `/src/main.ts` directly
+and shows an unstyled page with 404s. The workflow checks this setting first and fails with an explanation if it is wrong.

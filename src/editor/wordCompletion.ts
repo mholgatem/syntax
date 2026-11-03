@@ -1,26 +1,28 @@
 import { monaco } from './monacoSetup';
 
-// Word completion that ignores comments. Monaco's built-in word-based suggestions scan the
-// raw text in a worker, so words that only appear in comments get suggested too. This
+// Word completion that ignores comments and strings. Monaco's built-in word-based
+// suggestions scan the raw text in a worker, so words that only appear in comments or
+// strings get suggested too. This
 // replacement reads the syntax tokens the editor already computed for highlighting and
-// skips comment tokens. (Editors must set `wordBasedSuggestions: 'off'`.)
+// skips comment and string tokens. (Editors must set `wordBasedSuggestions: 'off'`.)
 
 interface LineTokensInternal {
   getCount(): number;
   getEndOffset(i: number): number;
-  getStandardTokenType(i: number): number; // 1 = comment
+  getStandardTokenType(i: number): number; // 1 = comment, 2 = string
 }
 interface ModelInternals {
   tokenization?: { getLineTokens?: (line: number) => LineTokensInternal };
 }
 
 const COMMENT = 1;
+const STRING = 2;
 const MAX_LINES = 50_000;
 const MAX_WORDS = 5_000;
 // Same separators as Monaco's default word definition.
 const WORD_RE = /[^\s`~!@#$%^&*()\-=+[{\]}\\|;:'",.<>/?]+/g;
 
-/** The text of a line with comment tokens blanked out, or the whole line if tokens are unavailable. */
+/** The text of a line with comment and string tokens blanked out, or the whole line if tokens are unavailable. */
 function codeText(model: monaco.editor.ITextModel, line: number): string {
   const text = model.getLineContent(line);
   const tokens = (model as unknown as ModelInternals).tokenization?.getLineTokens?.(line);
@@ -29,7 +31,8 @@ function codeText(model: monaco.editor.ITextModel, line: number): string {
   let start = 0;
   for (let i = 0, n = tokens.getCount(); i < n; i++) {
     const end = tokens.getEndOffset(i);
-    out += tokens.getStandardTokenType(i) === COMMENT ? ' ' : text.slice(start, end);
+    const type = tokens.getStandardTokenType(i);
+    out += type === COMMENT || type === STRING ? ' ' : text.slice(start, end);
     start = end;
   }
   return out;

@@ -18,6 +18,18 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      # This site must be built before it's served. If Pages is set to "Deploy from a branch",
+      # GitHub also publishes the raw, unbuilt repo on every push (index.html then requests
+      # /src/main.ts and 404s), and whichever deployment finishes last wins. Stop here instead.
+      - name: Check Pages is set to deploy from GitHub Actions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          build_type=$(gh api "repos/${{ github.repository }}/pages" --jq .build_type 2>/dev/null || echo "not-enabled")
+          if [ "$build_type" != "workflow" ]; then
+            echo "::error title=GitHub Pages source is '$build_type'::In the repo, go to Settings > Pages > Build and deployment > Source and choose 'GitHub Actions'. With 'Deploy from a branch', GitHub also publishes the unbuilt source and the site breaks (404 for src/main.ts, no styling)."
+            exit 1
+          fi
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
