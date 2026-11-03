@@ -170,7 +170,7 @@ export function buildMenus(): Menu[] {
         {
           label: 'Line Operations',
           submenu: () => [
-            editorItem('Duplicate Line', 'editor.action.copyLinesDownAction', 'Shift+Alt+↓'),
+            editorItem('Duplicate Line', 'editor.action.copyLinesDownAction', 'Ctrl+D'),
             editorItem('Delete Line', 'editor.action.deleteLines', 'Ctrl+Shift+K'),
             editorItem('Move Line Up', 'editor.action.moveLinesUpAction', 'Alt+↑'),
             editorItem('Move Line Down', 'editor.action.moveLinesDownAction', 'Alt+↓'),
@@ -369,11 +369,10 @@ function showShortcuts(): void {
     ['Undo / Redo', 'Ctrl+Z / Ctrl+Y'],
     ['Find / Replace', 'Ctrl+F / Ctrl+H'],
     ['Go to line', 'Ctrl+G'],
-    ['Duplicate / delete line', 'Shift+Alt+↓ / Ctrl+Shift+K'],
+    ['Duplicate / delete line', 'Ctrl+D / Ctrl+Shift+K'],
     ['Move line', 'Alt+↑ / Alt+↓'],
     ['Toggle comment', 'Ctrl+/'],
     ['Multi-cursor / column select', 'Alt+Click / Shift+Alt+Drag'],
-    ['Add next occurrence to selection', 'Ctrl+D'],
     ['Word wrap', 'Alt+Z'],
     ['Zoom', 'Ctrl+= / Ctrl+- / Ctrl+0'],
     ['Compare files', 'Ctrl+Alt+C, then Alt+F5 / Shift+Alt+F5 to step, Esc to close'],

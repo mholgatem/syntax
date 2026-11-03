@@ -41,4 +41,15 @@ for (const scheme of SCHEMES) {
   monaco.editor.defineTheme(monacoThemeName(scheme.id, 'dark'), toMonacoTheme(scheme.dark, 'dark'));
 }
 
+// Ctrl+D duplicates the current line (or selected lines) below, as in Notepad++,
+// instead of Monaco's default "add next occurrence to selection".
+monaco.editor.addKeybindingRules([
+  { keybinding: monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyD, command: '-editor.action.addSelectionToNextFindMatch' },
+  {
+    keybinding: monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyD,
+    command: 'editor.action.copyLinesDownAction',
+    when: 'editorTextFocus && !editorReadonly',
+  },
+]);
+
 export { monaco };

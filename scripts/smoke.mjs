@@ -106,6 +106,26 @@ await page.waitForTimeout(100);
 const firstLine = await page.textContent('#editor-host .view-line >> nth=0');
 check(firstLine.includes('edited'), 'undo history is per tab');
 
+// Ctrl+D duplicates the current line directly below.
+await page.click('.tab:has-text("tb.sv")');
+await page.click('#editor-host .view-line >> nth=1');
+const lineCountBefore = await page.evaluate(() => document.querySelectorAll('#editor-host .view-line').length);
+await page.keyboard.press('Control+d');
+await page.waitForTimeout(150);
+const dupLines = await page.evaluate(() =>
+  [...document.querySelectorAll('#editor-host .view-line')]
+    .sort((a, b) => parseFloat(a.style.top) - parseFloat(b.style.top))
+    .slice(0, 4)
+    .map((l) => l.textContent.replace(/ /g, ' ')),
+);
+check(
+  dupLines[1] === dupLines[2] && dupLines[1].includes('typedef') && !dupLines[3].includes('typedef'),
+  `Ctrl+D duplicates the line below (${JSON.stringify(dupLines.slice(1, 3))})`,
+);
+check((await page.evaluate(() => document.querySelectorAll('#editor-host .view-line').length)) === lineCountBefore + 1, 'Ctrl+D adds exactly one line');
+await page.keyboard.press('Control+z');
+await page.waitForTimeout(100);
+
 // New file via Alt+N
 await page.keyboard.press('Alt+n');
 await page.waitForFunction(() => document.querySelectorAll('.tab').length === 5);

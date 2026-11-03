@@ -35,6 +35,7 @@ Browsers reserve Ctrl+N, Ctrl+W and Ctrl+Tab, so those actions use Alt instead.
 | Next / previous tab | Alt+PgDn / Alt+PgUp, Alt+1…9 |
 | Find / Replace / Go to line | Ctrl+F / Ctrl+H / Ctrl+G |
 | Compare files | Ctrl+Alt+C, then Alt+F5 / Shift+Alt+F5 to step through changes, Esc to close |
+| Duplicate line | Ctrl+D |
 | Word wrap / Zoom | Alt+Z / Ctrl+= Ctrl+- Ctrl+0 |
 
 ## Development
