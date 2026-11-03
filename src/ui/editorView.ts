@@ -27,6 +27,11 @@ function editorOptions(s: Settings): monaco.editor.IEditorOptions & monaco.edito
 
 export function initEditors(editorHost: HTMLElement, diffHost: HTMLElement): void {
   const s = settings.get();
+  // Monaco renders the right-click menu in a shadow root attached to the host element,
+  // outside `.monaco-editor`, so it would miss the theme's --vscode-* color variables
+  // (transparent menu). Monaco also defines those variables on `.monaco-component`.
+  editorHost.classList.add('monaco-component');
+  diffHost.classList.add('monaco-component');
   editor = monaco.editor.create(editorHost, {
     ...editorOptions(s),
     model: null,
