@@ -422,6 +422,34 @@ await fb.keyboard.type('z');
 await fb.waitForTimeout(100);
 check(await fbDirty(), 'fallback: and the next edit marks it unsaved again');
 
+// Word completion only offers words from code, not words that appear only in comments.
+const wc = await context.newPage();
+wc.on('pageerror', (e) => errors.push(String(e)));
+await wc.goto(url);
+await wc.waitForSelector('body.ready');
+const wcSrc =
+  'module wc;\n  // zebracomment zebrashared\n  /* zebrablock */\n  wire zebrawire;\n  wire zebrashared;\nendmodule\n';
+await wc.setInputFiles('#file-input', [file('wc.sv', wcSrc)]);
+await wc.waitForSelector('.tab.active:has-text("wc.sv")');
+await wc.click('#editor-host .view-line >> nth=5'); // the "endmodule" line
+await wc.keyboard.press('Home');
+await wc.keyboard.type('zebr');
+await wc.keyboard.press('Control+Space');
+await wc.waitForSelector('.suggest-widget.visible .monaco-list-row', { timeout: 5000 }).catch(() => {});
+await wc.waitForTimeout(300);
+const suggested = await wc.$$eval('.suggest-widget.visible .monaco-list-row .label-name', (els) =>
+  els.map((e) => e.textContent.trim()),
+);
+check(
+  suggested.includes('zebrawire') && suggested.includes('zebrashared'),
+  `completion offers code words (${suggested.join(', ')})`,
+);
+check(
+  !suggested.includes('zebracomment') && !suggested.includes('zebrablock'),
+  'completion skips words that only appear in comments',
+);
+await wc.keyboard.press('Escape');
+
 const realErrors = errors.filter((e) => !/favicon/.test(e));
 check(realErrors.length === 0, `no console errors${realErrors.length ? ': ' + realErrors.join(' | ') : ''}`);
 

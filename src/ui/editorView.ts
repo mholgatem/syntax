@@ -2,6 +2,7 @@ import { monaco } from '../editor/monacoSetup';
 import { store, type Doc } from '../state/documents';
 import { settings, type Settings } from '../state/settings';
 import { installRichCopy } from '../editor/richCopy';
+import { registerWordCompletion } from '../editor/wordCompletion';
 
 // One code editor instance shared by every tab (each tab owns a model, and so its own
 // undo stack), plus one diff editor used for Compare.
@@ -19,6 +20,8 @@ function editorOptions(s: Settings): monaco.editor.IEditorOptions & monaco.edito
     renderWhitespace: s.renderWhitespace ? 'all' : 'selection',
     minimap: { enabled: s.minimap },
     lineNumbers: s.lineNumbers ? 'on' : 'off',
+    // Replaced by registerWordCompletion(), which skips words that only appear in comments.
+    wordBasedSuggestions: 'off',
   };
 }
 
@@ -69,6 +72,7 @@ export function initEditors(editorHost: HTMLElement, diffHost: HTMLElement): voi
   });
 
   installRichCopy(focusedEditor);
+  registerWordCompletion();
 
   store.subscribe(sync);
   sync();
