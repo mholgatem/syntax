@@ -1,5 +1,6 @@
 import { get, set } from 'idb-keyval';
-import { store } from './documents';
+import { store, type Pane, type PaneIndex } from './documents';
+import { getBookmarks, onBookmarksChange, setBookmarks } from '../editor/bookmarks';
 import type { Encoding } from '../io/text';
 import type { monaco } from '../editor/monacoSetup';
 
@@ -19,12 +20,18 @@ interface StoredDoc {
   untitled: boolean;
   handle?: FileSystemFileHandle;
   viewState: ViewState;
+  tabSize?: number;
+  insertSpaces?: boolean;
+  bookmarks?: number[];
 }
 
 interface Session {
   version: 1;
   docs: StoredDoc[];
   activeId: string | null;
+  /** Split-view layout (added later; absent in older sessions). */
+  panes?: Pane[];
+  focusedPane?: PaneIndex;
 }
 
 const KEY = 'syntax.session.v1';
@@ -33,6 +40,8 @@ function snapshot(includeHandles: boolean, viewStateFor: (id: string) => ViewSta
   return {
     version: 1,
     activeId: store.activeId,
+    panes: store.panes.map((p) => ({ ids: [...p.ids], activeId: p.activeId })),
+    focusedPane: store.focusedPane,
     docs: store.docs.map((d) => ({
       id: d.id,
       name: d.name,
@@ -45,6 +54,8 @@ function snapshot(includeHandles: boolean, viewStateFor: (id: string) => ViewSta
       untitled: d.untitled,
       handle: includeHandles ? d.handle : undefined,
       viewState: viewStateFor(d.id),
+      ...store.getIndent(d),
+      bookmarks: getBookmarks(d.model),
     })),
   };
 }
@@ -70,8 +81,12 @@ export async function restoreSession(): Promise<boolean> {
       handle: s.handle,
       savedHash: s.savedHash,
       viewState: s.viewState,
+      indent: s.tabSize && s.insertSpaces !== undefined ? { tabSize: s.tabSize, insertSpaces: s.insertSpaces } : undefined,
+      pane: 0,
     });
+    if (s.bookmarks?.length) setBookmarks(store.get(s.id)!.model, s.bookmarks);
   }
+  if (session.panes) store.setLayout(session.panes, session.focusedPane ?? 0);
   const active = session.activeId && store.get(session.activeId) ? session.activeId : store.docs[0].id;
   store.setActive(active);
   return true;
@@ -108,6 +123,7 @@ export function startAutosave(viewStateFor: (id: string) => ViewState): () => Pr
 
   store.subscribe(schedule);
   store.onContent(schedule);
+  onBookmarksChange(schedule);
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') void flush();
   });

@@ -12,7 +12,19 @@ export interface Settings {
   lineNumbers: boolean;
   diffInline: boolean;
   diffIgnoreWhitespace: boolean;
+  /** Realign `=`, `<=`, `=>`… blocks in HDL files when Enter is pressed. */
+  autoAlign: boolean;
+  /** Indentation for new files and files whose indentation can't be detected. */
+  defaultTabSize: number;
+  defaultInsertSpaces: boolean;
+  sidebarOpen: boolean;
+  sidebarTab: SidebarTab;
+  sidebarWidth: number;
+  /** Width of the left view as a fraction of the workspace, when split. */
+  splitRatio: number;
 }
+
+export type SidebarTab = 'outline' | 'search';
 
 export const DEFAULT_SETTINGS: Settings = {
   mode: 'system',
@@ -24,6 +36,13 @@ export const DEFAULT_SETTINGS: Settings = {
   lineNumbers: true,
   diffInline: false,
   diffIgnoreWhitespace: false,
+  autoAlign: false,
+  defaultTabSize: 4,
+  defaultInsertSpaces: true,
+  sidebarOpen: false,
+  sidebarTab: 'outline',
+  sidebarWidth: 300,
+  splitRatio: 0.5,
 };
 
 const KEY = 'syntax.settings.v1';

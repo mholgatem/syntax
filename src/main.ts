@@ -1,7 +1,8 @@
 import './styles/app.css';
-import { store } from './state/documents';
+import { store, type Doc, type PaneIndex } from './state/documents';
 import { settings } from './state/settings';
 import { restoreSession, startAutosave } from './state/persistence';
+import { forgetRecent, loadRecent, rememberClosed } from './state/recent';
 import { handleDrop, handleInputChange } from './io/openFiles';
 import { saveAll, downloadAllZip } from './io/saveFiles';
 import { initTheme } from './ui/theme';
@@ -18,10 +19,15 @@ import {
 import { initTabBar } from './ui/tabBar';
 import { initMenuBar } from './ui/menuBar';
 import { initStatusBar } from './ui/statusBar';
+import { initSidebar, showSidebarTab } from './ui/sidebar';
+import { initOutline } from './ui/outline';
+import { initSearchPanel, openSearchPanel } from './ui/searchPanel';
+import { initPwa } from './pwa';
 import {
   buildMenus,
   closeDoc,
-  closeMany,
+  closeTab,
+  closeTabs,
   compareWith,
   initShortcuts,
   newFile,
@@ -58,6 +64,9 @@ function initToolbar(root: HTMLElement): void {
     'sep',
     { icon: 'diff', title: 'Compare Files (Ctrl+Alt+C)', run: () => void compareWith(), id: 'tb-compare' },
     'sep',
+    { icon: 'list-tree', title: 'Outline (Alt+O)', run: () => showSidebarTab('outline', true), id: 'tb-outline' },
+    { icon: 'search-fuzzy', title: 'Find in All Tabs (Ctrl+Shift+F)', run: openSearchPanel, id: 'tb-search' },
+    'sep',
     { icon: 'color-mode', title: 'Toggle Light/Dark', run: toggleDarkMode },
   ];
   for (const b of buttons) {
@@ -81,6 +90,8 @@ function initToolbar(root: HTMLElement): void {
     $('tb-wrap').classList.toggle('on', s.wordWrap);
     $('tb-ws').classList.toggle('on', s.renderWhitespace);
     $('tb-compare').classList.toggle('on', !!getCompare());
+    $('tb-outline').classList.toggle('on', s.sidebarOpen && s.sidebarTab === 'outline');
+    $('tb-search').classList.toggle('on', s.sidebarOpen && s.sidebarTab === 'search');
     ($('tb-save-all') as HTMLButtonElement).disabled = !store.anyDirty();
   };
   settings.subscribe(syncToggles);
@@ -164,6 +175,39 @@ function initDropZone(): void {
   });
 }
 
+/** Drag the divider between the two views. */
+function initPaneDivider(): void {
+  const divider = $('pane-divider');
+  const left = $('pane-0');
+  const right = $('pane-1');
+  const apply = (ratio: number) => {
+    left.style.flexGrow = String(ratio);
+    right.style.flexGrow = String(1 - ratio);
+  };
+  divider.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    divider.setPointerCapture(e.pointerId);
+    divider.classList.add('dragging');
+    const box = $('panes').getBoundingClientRect();
+    let ratio = settings.get().splitRatio;
+    const move = (ev: PointerEvent) => {
+      ratio = Math.max(0.15, Math.min(0.85, (ev.clientX - box.left) / box.width));
+      apply(ratio);
+    };
+    const up = () => {
+      divider.classList.remove('dragging');
+      divider.removeEventListener('pointermove', move);
+      divider.removeEventListener('pointerup', up);
+      settings.update({ splitRatio: ratio });
+    };
+    divider.addEventListener('pointermove', move);
+    divider.addEventListener('pointerup', up);
+  });
+  divider.addEventListener('dblclick', () => settings.update({ splitRatio: 0.5 }));
+  settings.subscribe((s) => apply(s.splitRatio));
+  apply(settings.get().splitRatio);
+}
+
 function initWelcome(): void {
   const welcome = $('welcome');
   $('welcome-new').addEventListener('click', newFile);
@@ -175,19 +219,25 @@ function initWelcome(): void {
 
 async function main(): Promise<void> {
   initTheme();
-  initEditors($('editor-host'), $('diff-host'));
+  initEditors([$('editor-host'), $('editor-host-2')], $('diff-host'));
   initMenuBar($('menubar'), buildMenus());
   initToolbar($('toolbar'));
-  initTabBar($('tabbar'), {
-    close: (d) => void closeDoc(d),
-    closeMany: (docs) => void closeMany(docs),
-    rename: (d) => void renameDoc(d),
-    save: (d) => void save(d),
-    saveAs: (d) => void saveAs(d),
-    compareWith: (d) => void compareWith(d),
+  const tabActions = {
+    closeTab: (d: Doc, p: PaneIndex) => void closeTab(d, p),
+    closeTabs: (docs: Doc[], p: PaneIndex) => void closeTabs(docs, p),
+    rename: (d: Doc) => void renameDoc(d),
+    save: (d: Doc) => void save(d),
+    saveAs: (d: Doc) => void saveAs(d),
+    compareWith: (d: Doc) => void compareWith(d),
     newFile,
-  });
+  };
+  initTabBar($('tabbar'), 0, tabActions);
+  initTabBar($('tabbar-2'), 1, tabActions);
+  initPaneDivider();
   initStatusBar($('statusbar'));
+  initSidebar();
+  initOutline($('outline-panel'));
+  initSearchPanel($('search-panel'));
   initDiffToolbar();
   initDropZone();
   initWelcome();
@@ -197,9 +247,25 @@ async function main(): Promise<void> {
   setFileInput(input);
   input.addEventListener('change', () => void handleInputChange(input));
 
+  // Recently closed files: remember a file when its tab closes, forget it when it is reopened.
+  void loadRecent();
+  store.onRemove((doc) => {
+    if (doc.handle) void rememberClosed(doc.name, doc.handle);
+  });
+  let known = new Set<string>();
+
   const restored = await restoreSession();
   if (!restored) store.setActive(null);
+  known = new Set(store.docs.map((d) => d.id));
+  store.subscribe(() => {
+    for (const d of store.docs) {
+      if (known.has(d.id)) continue;
+      known.add(d.id);
+      if (d.handle) void forgetRecent(d.handle);
+    }
+  });
   startAutosave(viewStateFor);
+  initPwa();
 
   // Ask before leaving with unsaved changes. Browsers show their own generic message.
   window.addEventListener('beforeunload', (e) => {

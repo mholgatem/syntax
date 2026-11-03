@@ -450,6 +450,174 @@ check(
 );
 await wc.keyboard.press('Escape');
 
+// ---------- feature wave 2: outline, go to definition, instances, align, search, bookmarks,
+// indentation, format, split view, installable app. Fresh context = empty session.
+const ctx2 = await browser.newContext({
+  viewport: { width: 1400, height: 850 },
+  permissions: ['clipboard-read', 'clipboard-write'],
+});
+const nf = await ctx2.newPage();
+nf.on('pageerror', (e) => errors.push(String(e)));
+nf.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+await nf.goto(url);
+await nf.waitForSelector('body.ready');
+const topV = `module top (input clk, output reg [7:0] q);\n  wire [7:0] s;\n  adder #(.W(8)) u_add (.a(q), .b(8'd1), .y(s));\n  always @(posedge clk) q <= s;\nendmodule\n`;
+const adderV = `module adder #(parameter W = 8) (\n  input  [W-1:0] a,\n  input  [W-1:0] b,\n  output [W-1:0] y\n);\n  assign y = a + b;\nendmodule\n`;
+await nf.setInputFiles('#file-input', [file('adder.v', adderV), file('top.v', topV)]);
+await nf.waitForSelector('.tab.active:has-text("top.v")');
+const nfLines = (host = '#editor-host') =>
+  nf.$$eval(`${host} .view-line`, (els) =>
+    els
+      .sort((a, b) => parseFloat(a.style.top) - parseFloat(b.style.top))
+      .map((e) => e.textContent.replace(/ /g, ' ')),
+  );
+const gotoLine = async (n) => {
+  await nf.keyboard.press('Control+g');
+  await nf.keyboard.type(String(n));
+  await nf.keyboard.press('Enter');
+  await nf.waitForTimeout(100);
+};
+const menu = async (top, item) => {
+  await nf.click(`.menubar-item:text-is("${top}")`);
+  await nf.click(`.menu-popup .menu-item:has(.menu-label:text-is("${item}"))`);
+  await nf.waitForTimeout(150);
+};
+const statusPos = () => nf.textContent('.status-pos');
+
+// Outline
+await nf.click('#editor-host .view-line >> nth=0');
+await nf.keyboard.press('Alt+o');
+await nf.waitForSelector('#outline-panel .tree-row');
+const outlineNames = await nf.$$eval('#outline-panel .tree-name', (els) => els.map((e) => e.textContent));
+check(['top', 'clk', 'q', 's', 'u_add'].every((n) => outlineNames.includes(n)), `outline lists module, ports, signals, instance (${outlineNames.join(', ')})`);
+await nf.click('#outline-panel .tree-row:has(.tree-name:text-is("u_add"))');
+await nf.waitForTimeout(150);
+check((await statusPos()).includes('Ln: 3'), 'clicking an outline item moves the cursor to it');
+
+// Go to definition across tabs
+await gotoLine(3);
+await nf.keyboard.press('Home');
+await nf.keyboard.press('ArrowRight');
+await nf.keyboard.press('ArrowRight');
+await nf.keyboard.press('F12');
+await nf.waitForSelector('.tab.active:has-text("adder.v")', { timeout: 5000 }).catch(() => {});
+check(await nf.isVisible('.tab.active:has-text("adder.v")'), 'F12 on a module name opens its definition in another tab');
+check((await statusPos()).includes('Ln: 1'), 'definition cursor is on the module line');
+
+// Copy as Instance
+await menu('Edit', 'Copy as Instance');
+const inst = (await nf.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/g, '\n'); // the OS clipboard may use CRLF
+check(
+  inst === 'adder #(\n  .W (W)\n) u_adder (\n  .a (a),\n  .b (b),\n  .y (y)\n);',
+  `Copy as Instance builds a named-port instance (${JSON.stringify(inst)})`,
+);
+
+// Indentation detection + change from the status bar
+check((await nf.textContent('.status-indent')) === 'Spaces: 2', `indentation detected as 2 spaces (${await nf.textContent('.status-indent')})`);
+await nf.click('.status-indent');
+await nf.click('.menu-popup .menu-item:has(.menu-label:text-is("Indent Using Tabs"))');
+await nf.waitForTimeout(100);
+check((await nf.textContent('.status-indent')) === 'Tab Size: 2', 'status bar switches the file to tabs');
+
+// Auto-align on Enter: off by default, on via Settings
+await nf.setInputFiles('#file-input', [file('align.v', '')]);
+await nf.waitForSelector('.tab.active:has-text("align.v")');
+await nf.click('#editor-host .view-line >> nth=0');
+await nf.keyboard.type('assign a = 1;');
+await nf.keyboard.press('Enter');
+await nf.keyboard.type('assign bbb = 2;');
+await nf.keyboard.press('Enter');
+await nf.waitForTimeout(150);
+check((await nfLines())[0] === 'assign a = 1;', 'auto-align is off by default');
+await menu('Settings', 'Auto-Align on Enter (Verilog / VHDL)');
+await nf.click('#editor-host .view-line >> nth=2');
+await nf.keyboard.type('assign cc = 3;');
+await nf.keyboard.press('Enter');
+await nf.waitForTimeout(200);
+let al = await nfLines();
+check(
+  al[0] === 'assign a   = 1;' && al[1] === 'assign bbb = 2;' && al[2] === 'assign cc  = 3;',
+  `auto-align lines up the block after Enter (${JSON.stringify(al.slice(0, 3))})`,
+);
+await nf.keyboard.press('Control+z');
+await nf.waitForTimeout(150);
+al = await nfLines();
+check(al[0] === 'assign a = 1;' && al.length >= 4, 'one Ctrl+Z undoes only the alignment');
+await menu('Settings', 'Auto-Align on Enter (Verilog / VHDL)'); // back off
+await nf.click('#editor-host .view-line >> nth=0');
+await nf.keyboard.press('Control+Alt+a');
+await nf.waitForTimeout(150);
+check((await nfLines())[0] === 'assign a   = 1;', 'Ctrl+Alt+A aligns the block on demand');
+
+// Find / replace in all tabs
+await nf.keyboard.press('Control+Shift+f');
+await nf.waitForSelector('#search-find:focus');
+await nf.keyboard.type('endmodule');
+await nf.waitForSelector('#search-panel .result-line');
+check((await nf.textContent('#search-panel .panel-summary')).startsWith('2 results in 2 files'), `search finds matches in every tab (${await nf.textContent('#search-panel .panel-summary')})`);
+await nf.fill('#search-replace', 'endmodule // done');
+await nf.click('#search-panel .input-row .codicon-replace-all');
+await nf.waitForTimeout(300);
+await nf.click('.tab:has-text("top.v")');
+check((await nfLines())[4] === 'endmodule // done', 'Replace All edits the other tabs');
+await nf.click('#editor-host .view-line >> nth=0');
+await nf.keyboard.press('Control+z');
+await nf.waitForTimeout(150);
+check((await nfLines())[4] === 'endmodule', 'one Ctrl+Z per file undoes the replacement');
+
+// Bookmarks: toggle, jump, survive a reload
+await gotoLine(2);
+await nf.keyboard.press('Control+F2');
+await nf.waitForTimeout(100);
+check((await nf.$$('#editor-host .bookmark-glyph')).length === 1, 'Ctrl+F2 adds a bookmark glyph');
+await gotoLine(5);
+await nf.keyboard.press('F2');
+await nf.waitForTimeout(100);
+check((await statusPos()).includes('Ln: 2'), 'F2 jumps to the bookmark');
+
+// Format document (JSON)
+await nf.setInputFiles('#file-input', [file('data.json', '{"a":1,"b":[1,2]}')]);
+await nf.waitForSelector('.tab.active:has-text("data.json")');
+await nf.click('#editor-host .view-line >> nth=0');
+await nf.keyboard.press('Shift+Alt+f');
+await nf.waitForFunction(() => document.querySelectorAll('#editor-host .view-line').length > 2, null, { timeout: 8000 }).catch(() => {});
+check((await nfLines()).length > 2, 'Format Document pretty-prints JSON');
+
+// Split view: clone top.v into the other view; edits show in both
+await nf.click('.tab:has-text("top.v")', { button: 'right' });
+await nf.click('.menu-popup .menu-item:has(.menu-label:text-is("Clone to Other View"))');
+await nf.waitForSelector('body.split #tabbar-2 .tab:has-text("top.v")');
+check(true, 'Clone to Other View opens the second view');
+await nf.click('#editor-host-2 .view-line >> nth=0');
+await nf.keyboard.press('Control+Home');
+await nf.keyboard.type('// split edit\n');
+await nf.waitForTimeout(150);
+await nf.click('#tabbar .tab:has-text("top.v")');
+check((await nfLines('#editor-host'))[0] === '// split edit', 'an edit in one view shows in the other');
+await nf.click('#tabbar-2 .tab:has-text("top.v") .tab-close');
+await nf.waitForTimeout(150);
+check(!(await nf.evaluate(() => document.body.classList.contains('split'))) && (await nf.isVisible('#tabbar .tab:has-text("top.v")')),
+  'closing the clone keeps the file open and closes the second view');
+
+// Bookmark persists across reload (session autosave runs ~1s after changes)
+await nf.waitForTimeout(1500);
+await nf.reload();
+await nf.waitForSelector('body.ready');
+await nf.click('.tab:has-text("top.v")');
+await nf.waitForTimeout(300);
+check((await nf.$$('#editor-host .bookmark-glyph')).length === 1, 'bookmarks are restored after a reload');
+
+// Installable app
+const pwaInfo = await nf.evaluate(async () => {
+  const reg = await Promise.race([navigator.serviceWorker.ready, new Promise((r) => setTimeout(() => r(null), 5000))]);
+  const href = document.querySelector('link[rel="manifest"]')?.href;
+  const manifest = href ? await (await fetch(href)).json() : null;
+  return { sw: !!reg, accepts: manifest?.file_handlers?.[0]?.accept?.['text/plain'] ?? [] };
+});
+check(pwaInfo.sw, 'service worker is registered');
+check(['.v', '.sv', '.vhd'].every((e) => pwaInfo.accepts.includes(e)), 'manifest registers HDL file handlers');
+await ctx2.close();
+
 const realErrors = errors.filter((e) => !/favicon/.test(e));
 check(realErrors.length === 0, `no console errors${realErrors.length ? ': ' + realErrors.join(' | ') : ''}`);
 

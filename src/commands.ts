@@ -1,25 +1,44 @@
-import { store, type Doc } from './state/documents';
+import { store, type Doc, type PaneIndex } from './state/documents';
 import { settings } from './state/settings';
+import { clearRecent, forgetRecent, recentFiles, recentSupported, type RecentEntry } from './state/recent';
 import { SCHEMES } from './editor/themes';
+import {
+  clearBookmarks,
+  copyBookmarkedLines,
+  cutBookmarkedLines,
+  gotoBookmark,
+  removeBookmarkedLines,
+  removeUnbookmarkedLines,
+  toggleAtCursor,
+} from './editor/bookmarks';
+import { alignStatements, copyAsInstance, insertInstance } from './editor/hdl/monacoHdl';
+import { hdlLang } from './editor/hdl/lex';
 import { saveAll, saveDoc, downloadAllZip } from './io/saveFiles';
-import { pickAndOpen } from './io/openFiles';
-import { confirmSave, confirmSaveMany, pickTwo, promptText, showInfo } from './ui/dialogs';
+import { openIncoming, pickAndOpen } from './io/openFiles';
+import { confirmSave, confirmSaveMany, pickTwo, promptText, showInfo, toast } from './ui/dialogs';
 import {
   closeCompare,
   diffNavigate,
+  editorActionSupported,
   focusedDoc,
+  focusedEditor,
   getCompare,
   openCompare,
   runEditorAction,
   swapCompare,
 } from './ui/editorView';
 import type { Menu, MenuItem } from './ui/menuBar';
-import { encodingMenuItems, eolMenuItems, languageMenuItems } from './ui/statusBar';
+import { encodingMenuItems, eolMenuItems, indentMenuItems, languageMenuItems } from './ui/statusBar';
+import { showSidebarTab } from './ui/sidebar';
+import { openSearchPanel } from './ui/searchPanel';
+import { canInstall, promptInstall } from './pwa';
 
 let fileInput: HTMLInputElement;
 export function setFileInput(input: HTMLInputElement): void {
   fileInput = input;
 }
+
+const otherPane = (p: PaneIndex): PaneIndex => (p === 0 ? 1 : 0);
 
 // ---------- file commands ----------
 
@@ -33,6 +52,19 @@ export function openFiles(): void {
   void pickAndOpen(fileInput);
 }
 
+export async function openRecent(entry: RecentEntry): Promise<void> {
+  try {
+    const opts = { mode: 'read' as const };
+    if ((await entry.handle.queryPermission(opts)) !== 'granted' && (await entry.handle.requestPermission(opts)) !== 'granted') return;
+    const file = await entry.handle.getFile();
+    if (getCompare()) closeCompare();
+    await openIncoming([{ file, handle: entry.handle }]);
+  } catch {
+    toast(`Could not open ${entry.name}. It may have been moved or deleted.`, 'error');
+    void forgetRecent(entry.handle);
+  }
+}
+
 export async function save(doc = focusedDoc()): Promise<boolean> {
   return doc ? saveDoc(doc) : false;
 }
@@ -41,7 +73,7 @@ export async function saveAs(doc = focusedDoc()): Promise<boolean> {
   return doc ? saveDoc(doc, { saveAs: true }) : false;
 }
 
-/** Close one doc, asking to save if it has unsaved changes. Resolves false if cancelled. */
+/** Close one doc everywhere, asking to save if it has unsaved changes. Resolves false if cancelled. */
 export async function closeDoc(doc: Doc | undefined = focusedDoc()): Promise<boolean> {
   if (!doc) return true;
   if (store.isDirty(doc)) {
@@ -70,6 +102,29 @@ export async function closeMany(docs: Doc[]): Promise<boolean> {
   }
   for (const d of docs) store.remove(d.id);
   return true;
+}
+
+/** Close a tab in one view. A doc cloned into the other view just leaves this view. */
+export async function closeTab(doc: Doc, pane: PaneIndex): Promise<boolean> {
+  if (store.panes[otherPane(pane)].ids.includes(doc.id) && store.panes[pane].ids.includes(doc.id)) {
+    store.removeFromPane(doc.id, pane);
+    return true;
+  }
+  return closeDoc(doc);
+}
+
+export async function closeTabs(docs: Doc[], pane: PaneIndex): Promise<boolean> {
+  const clones = docs.filter((d) => store.panes[otherPane(pane)].ids.includes(d.id));
+  for (const d of clones) store.removeFromPane(d.id, pane);
+  return closeMany(docs.filter((d) => !clones.includes(d)));
+}
+
+/** Alt+W: close the active tab of the focused view (or the focused side when comparing). */
+function closeActive(): void {
+  const doc = focusedDoc();
+  if (!doc) return;
+  if (getCompare()) void closeDoc(doc);
+  else void closeTab(doc, store.focusedPane);
 }
 
 export async function renameDoc(doc = focusedDoc()): Promise<void> {
@@ -101,12 +156,28 @@ export async function compareWith(doc?: Doc): Promise<void> {
   if (pair) openCompare(pair[0], pair[1]);
 }
 
+/** Cycle through the tabs of the focused view. */
 function cycleTab(delta: number): void {
-  if (store.docs.length === 0) return;
-  const i = store.docs.findIndex((d) => d.id === store.activeId);
-  const next = store.docs[(i + delta + store.docs.length) % store.docs.length];
+  const ids = store.panes[store.focusedPane].ids;
+  if (ids.length === 0) return;
+  const i = ids.indexOf(store.activeId ?? '');
+  const next = ids[(i + delta + ids.length) % ids.length];
   if (getCompare()) closeCompare();
-  store.setActive(next.id);
+  store.setActiveInPane(next, store.focusedPane);
+}
+
+function moveToOtherView(clone: boolean): void {
+  const doc = focusedDoc();
+  if (!doc) return;
+  if (getCompare()) closeCompare();
+  const from = store.focusedPane;
+  if (clone) store.cloneToPane(doc.id, otherPane(from));
+  else store.moveToPane(doc.id, from, otherPane(from));
+}
+
+function switchView(): void {
+  if (!store.split || getCompare()) return;
+  store.focusPane(otherPane(store.focusedPane));
 }
 
 function zoom(delta: number | null): void {
@@ -114,8 +185,8 @@ function zoom(delta: number | null): void {
   settings.update({ fontSize: size });
 }
 
-const toggle = (key: 'wordWrap' | 'renderWhitespace' | 'minimap' | 'lineNumbers' | 'diffInline' | 'diffIgnoreWhitespace') =>
-  settings.update({ [key]: !settings.get()[key] });
+type BoolSetting = 'wordWrap' | 'renderWhitespace' | 'minimap' | 'lineNumbers' | 'diffInline' | 'diffIgnoreWhitespace' | 'autoAlign';
+const toggle = (key: BoolSetting) => settings.update({ [key]: !settings.get()[key] });
 
 export function toggleDarkMode(): void {
   const { mode } = settings.get();
@@ -126,10 +197,29 @@ export function toggleDarkMode(): void {
 // ---------- menus ----------
 
 const noDoc = () => !focusedDoc();
+const notHdl = () => {
+  const doc = focusedDoc();
+  return !doc || !hdlLang(doc.model.getLanguageId());
+};
 const act = (id: string) => () => runEditorAction(id);
+const withEditor = (fn: (ed: ReturnType<typeof focusedEditor>) => unknown) => () => {
+  const ed = focusedEditor();
+  if (ed.getModel()) void fn(ed);
+};
 
 function editorItem(label: string, id: string, shortcut?: string): MenuItem {
   return { label, shortcut, action: act(id), disabled: noDoc };
+}
+
+function recentMenuItems(): MenuItem[] {
+  if (!recentSupported()) return [{ label: 'Needs Chrome or Edge', action: () => undefined, disabled: () => true }];
+  const items = recentFiles();
+  if (items.length === 0) return [{ label: 'No recently closed files', action: () => undefined, disabled: () => true }];
+  return [
+    ...items.map((e, i): MenuItem => ({ label: `${i + 1}: ${e.name}`, action: () => void openRecent(e) })),
+    'separator',
+    { label: 'Clear Recent Files', action: () => void clearRecent() },
+  ];
 }
 
 export function buildMenus(): Menu[] {
@@ -139,6 +229,7 @@ export function buildMenus(): Menu[] {
       items: () => [
         { label: 'New', shortcut: 'Alt+N', action: newFile },
         { label: 'Open…', shortcut: 'Ctrl+O', action: openFiles },
+        { label: 'Recent Files', submenu: recentMenuItems },
         'separator',
         { label: 'Save', shortcut: 'Ctrl+S', action: () => void save(), disabled: noDoc },
         { label: 'Save As…', shortcut: 'Ctrl+Alt+S', action: () => void saveAs(), disabled: noDoc },
@@ -147,13 +238,14 @@ export function buildMenus(): Menu[] {
         'separator',
         { label: 'Rename…', action: () => void renameDoc(), disabled: noDoc },
         'separator',
-        { label: 'Close', shortcut: 'Alt+W', action: () => void closeDoc(), disabled: noDoc },
+        { label: 'Close', shortcut: 'Alt+W', action: closeActive, disabled: noDoc },
         { label: 'Close All', action: () => void closeMany([...store.docs]), disabled: () => store.docs.length === 0 },
         {
           label: 'Close All but Active',
           action: () => void closeMany(store.docs.filter((d) => d.id !== store.activeId)),
           disabled: () => store.docs.length < 2,
         },
+        ...(canInstall() ? (['separator', { label: 'Install as App…', action: () => void promptInstall() }] as MenuItem[]) : []),
       ],
     },
     {
@@ -202,12 +294,27 @@ export function buildMenus(): Menu[] {
           submenu: () => [
             editorItem('Indent', 'editor.action.indentLines', 'Ctrl+]'),
             editorItem('Outdent', 'editor.action.outdentLines', 'Ctrl+['),
-            editorItem('Convert Indentation to Spaces', 'editor.action.indentationToSpaces'),
-            editorItem('Convert Indentation to Tabs', 'editor.action.indentationToTabs'),
-            editorItem('Format Document', 'editor.action.formatDocument', 'Shift+Alt+F'),
+            'separator',
+            ...indentMenuItems(),
           ],
         },
         { label: 'EOL Conversion', submenu: eolMenuItems },
+        'separator',
+        {
+          label: 'Format Document',
+          shortcut: 'Shift+Alt+F',
+          action: act('editor.action.formatDocument'),
+          disabled: () => !editorActionSupported('editor.action.formatDocument'),
+        },
+        {
+          label: 'Format Selection',
+          action: act('editor.action.formatSelection'),
+          disabled: () => !editorActionSupported('editor.action.formatSelection'),
+        },
+        'separator',
+        { label: 'Align Statements', shortcut: 'Ctrl+Alt+A', action: withEditor(alignStatements), disabled: notHdl },
+        { label: 'Copy as Instance', action: withEditor(copyAsInstance), disabled: notHdl },
+        { label: 'Insert Instance of…', action: withEditor(insertInstance), disabled: notHdl },
         'separator',
         editorItem('Command Palette…', 'editor.action.quickCommand', 'F1'),
       ],
@@ -220,9 +327,28 @@ export function buildMenus(): Menu[] {
         editorItem('Find Next', 'editor.action.nextMatchFindAction', 'F3'),
         editorItem('Find Previous', 'editor.action.previousMatchFindAction', 'Shift+F3'),
         editorItem('Select All Occurrences', 'editor.action.selectHighlights', 'Ctrl+Shift+L'),
+        { label: 'Find in All Tabs…', shortcut: 'Ctrl+Shift+F', action: openSearchPanel, disabled: () => store.docs.length === 0 },
         'separator',
         editorItem('Go to Line…', 'editor.action.gotoLine', 'Ctrl+G'),
         editorItem('Go to Matching Bracket', 'editor.action.jumpToBracket', 'Ctrl+Shift+\\'),
+        { label: 'Go to Symbol…', shortcut: 'Ctrl+Shift+O', action: act('editor.action.quickOutline'), disabled: notHdl },
+        { label: 'Go to Definition', shortcut: 'F12', action: act('editor.action.revealDefinition'), disabled: notHdl },
+        { label: 'Peek Definition', shortcut: 'Alt+F12', action: act('editor.action.peekDefinition'), disabled: notHdl },
+        'separator',
+        {
+          label: 'Bookmark',
+          submenu: () => [
+            { label: 'Toggle Bookmark', shortcut: 'Ctrl+F2', action: withEditor(toggleAtCursor), disabled: noDoc },
+            { label: 'Next Bookmark', shortcut: 'F2', action: withEditor((ed) => gotoBookmark(ed, 1)), disabled: noDoc },
+            { label: 'Previous Bookmark', shortcut: 'Shift+F2', action: withEditor((ed) => gotoBookmark(ed, -1)), disabled: noDoc },
+            { label: 'Clear All Bookmarks', action: withEditor((ed) => clearBookmarks(ed.getModel()!)), disabled: noDoc },
+            'separator',
+            { label: 'Copy Bookmarked Lines', action: withEditor(copyBookmarkedLines), disabled: noDoc },
+            { label: 'Cut Bookmarked Lines', action: withEditor(cutBookmarkedLines), disabled: noDoc },
+            { label: 'Remove Bookmarked Lines', action: withEditor(removeBookmarkedLines), disabled: noDoc },
+            { label: 'Remove Unbookmarked Lines', action: withEditor(removeUnbookmarkedLines), disabled: noDoc },
+          ],
+        },
       ],
     },
     {
@@ -233,12 +359,28 @@ export function buildMenus(): Menu[] {
         { label: 'Line Numbers', checked: () => settings.get().lineNumbers, action: () => toggle('lineNumbers') },
         { label: 'Minimap', checked: () => settings.get().minimap, action: () => toggle('minimap') },
         'separator',
+        {
+          label: 'Outline',
+          shortcut: 'Alt+O',
+          checked: () => settings.get().sidebarOpen && settings.get().sidebarTab === 'outline',
+          action: () => showSidebarTab('outline', true),
+        },
+        {
+          label: 'Search Results',
+          checked: () => settings.get().sidebarOpen && settings.get().sidebarTab === 'search',
+          action: () => showSidebarTab('search', true),
+        },
+        'separator',
         { label: 'Zoom In', shortcut: 'Ctrl+=', action: () => zoom(1) },
         { label: 'Zoom Out', shortcut: 'Ctrl+-', action: () => zoom(-1) },
         { label: 'Reset Zoom', shortcut: 'Ctrl+0', action: () => zoom(null) },
         'separator',
         editorItem('Fold All', 'editor.foldAll'),
         editorItem('Unfold All', 'editor.unfoldAll'),
+        'separator',
+        { label: 'Move to Other View', action: () => moveToOtherView(false), disabled: () => noDoc() || (!store.split && store.docs.length < 2) },
+        { label: 'Clone to Other View', action: () => moveToOtherView(true), disabled: noDoc },
+        { label: 'Switch to Other View', shortcut: 'F8', action: switchView, disabled: () => !store.split },
         'separator',
         { label: 'Next Tab', shortcut: 'Alt+PgDn', action: () => cycleTab(1), disabled: () => store.docs.length < 2 },
         { label: 'Previous Tab', shortcut: 'Alt+PgUp', action: () => cycleTab(-1), disabled: () => store.docs.length < 2 },
@@ -284,6 +426,25 @@ export function buildMenus(): Menu[] {
               action: () => settings.update({ scheme: s.id }),
             })),
         },
+        {
+          label: 'Default Indentation',
+          submenu: () => [
+            { label: 'Spaces', checked: () => settings.get().defaultInsertSpaces, action: () => settings.update({ defaultInsertSpaces: true }) },
+            { label: 'Tabs', checked: () => !settings.get().defaultInsertSpaces, action: () => settings.update({ defaultInsertSpaces: false }) },
+            'separator',
+            ...[2, 3, 4, 8].map((n) => ({
+              label: `Size: ${n}`,
+              checked: () => settings.get().defaultTabSize === n,
+              action: () => settings.update({ defaultTabSize: n }),
+            })),
+          ],
+        },
+        'separator',
+        {
+          label: 'Auto-Align on Enter (Verilog / VHDL)',
+          checked: () => settings.get().autoAlign,
+          action: () => toggle('autoAlign'),
+        },
         'separator',
         { label: 'Keyboard Shortcuts', action: showShortcuts },
         { label: 'About Syntax', action: showAbout },
@@ -311,10 +472,13 @@ const SHORTCUTS: Shortcut[] = [
   { key: 's', ctrl: true, shift: true, run: () => void saveAll() },
   // Browsers reserve Ctrl+N / Ctrl+W / Ctrl+Tab, so new/close/switch use Alt.
   { key: 'n', alt: true, run: newFile },
-  { key: 'w', alt: true, run: () => void closeDoc() },
+  { key: 'w', alt: true, run: closeActive },
   { key: 'pagedown', alt: true, run: () => cycleTab(1) },
   { key: 'pageup', alt: true, run: () => cycleTab(-1) },
   { key: 'z', alt: true, run: () => toggle('wordWrap') },
+  { key: 'o', alt: true, run: () => showSidebarTab('outline', true) },
+  { key: 'f', ctrl: true, shift: true, run: openSearchPanel },
+  { key: 'f8', run: switchView },
   { key: '=', ctrl: true, run: () => zoom(1) },
   { key: '+', ctrl: true, shift: true, run: () => zoom(1) },
   { key: '-', ctrl: true, run: () => zoom(-1) },
@@ -332,13 +496,14 @@ export function initShortcuts(): void {
       if (document.querySelector('.modal-backdrop')) return;
       const key = e.key.toLowerCase();
       const ctrl = e.ctrlKey || e.metaKey;
-      // Alt+1..9 jumps to a tab.
+      // Alt+1..9 jumps to a tab of the focused view.
       if (e.altKey && !ctrl && !e.shiftKey && /^[1-9]$/.test(key)) {
-        const doc = key === '9' ? store.docs[store.docs.length - 1] : store.docs[Number(key) - 1];
-        if (doc) {
+        const ids = store.panes[store.focusedPane].ids;
+        const id = key === '9' ? ids[ids.length - 1] : ids[Number(key) - 1];
+        if (id) {
           e.preventDefault();
           if (getCompare()) closeCompare();
-          store.setActive(doc.id);
+          store.setActiveInPane(id, store.focusedPane);
         }
         return;
       }
@@ -359,28 +524,36 @@ export function initShortcuts(): void {
 
 // ---------- help ----------
 
+const SHORTCUT_ROWS: [string, string][] = [
+  ['New file', 'Alt+N  (or double-click the tab strip)'],
+  ['Open files', 'Ctrl+O  (or drag and drop files/folders)'],
+  ['Save / Save As / Save All', 'Ctrl+S / Ctrl+Alt+S / Ctrl+Shift+S'],
+  ['Close tab', 'Alt+W  (or middle-click the tab)'],
+  ['Next / previous tab', 'Alt+PgDn / Alt+PgUp, Alt+1…9'],
+  ['Switch view (split)', 'F8'],
+  ['Undo / Redo', 'Ctrl+Z / Ctrl+Y'],
+  ['Find / Replace', 'Ctrl+F / Ctrl+H'],
+  ['Find in all tabs', 'Ctrl+Shift+F'],
+  ['Go to line / symbol', 'Ctrl+G / Ctrl+Shift+O'],
+  ['Go to / peek definition', 'F12 or Ctrl+Click / Alt+F12'],
+  ['Bookmark: toggle / next / previous', 'Ctrl+F2 / F2 / Shift+F2  (or click the margin)'],
+  ['Outline panel', 'Alt+O'],
+  ['Align statements (HDL)', 'Ctrl+Alt+A'],
+  ['Format document', 'Shift+Alt+F'],
+  ['Duplicate / delete line', 'Ctrl+D / Ctrl+Shift+K'],
+  ['Move line', 'Alt+↑ / Alt+↓'],
+  ['Toggle comment', 'Ctrl+/'],
+  ['Multi-cursor / column select', 'Alt+Click / Shift+Alt+Drag'],
+  ['Word wrap', 'Alt+Z'],
+  ['Zoom', 'Ctrl+= / Ctrl+- / Ctrl+0'],
+  ['Compare files', 'Ctrl+Alt+C, then Alt+F5 / Shift+Alt+F5 to step, Esc to close'],
+  ['Command palette', 'F1'],
+];
+
 function showShortcuts(): void {
-  const rows: [string, string][] = [
-    ['New file', 'Alt+N  (or double-click the tab strip)'],
-    ['Open files', 'Ctrl+O  (or drag and drop files/folders)'],
-    ['Save / Save As / Save All', 'Ctrl+S / Ctrl+Alt+S / Ctrl+Shift+S'],
-    ['Close tab', 'Alt+W  (or middle-click the tab)'],
-    ['Next / previous tab', 'Alt+PgDn / Alt+PgUp, Alt+1…9'],
-    ['Undo / Redo', 'Ctrl+Z / Ctrl+Y'],
-    ['Find / Replace', 'Ctrl+F / Ctrl+H'],
-    ['Go to line', 'Ctrl+G'],
-    ['Duplicate / delete line', 'Ctrl+D / Ctrl+Shift+K'],
-    ['Move line', 'Alt+↑ / Alt+↓'],
-    ['Toggle comment', 'Ctrl+/'],
-    ['Multi-cursor / column select', 'Alt+Click / Shift+Alt+Drag'],
-    ['Word wrap', 'Alt+Z'],
-    ['Zoom', 'Ctrl+= / Ctrl+- / Ctrl+0'],
-    ['Compare files', 'Ctrl+Alt+C, then Alt+F5 / Shift+Alt+F5 to step, Esc to close'],
-    ['Command palette', 'F1'],
-  ];
   const table = document.createElement('table');
   table.className = 'shortcuts';
-  for (const [a, b] of rows) {
+  for (const [a, b] of SHORTCUT_ROWS) {
     const tr = table.insertRow();
     tr.insertCell().textContent = a;
     const kbd = document.createElement('kbd');
