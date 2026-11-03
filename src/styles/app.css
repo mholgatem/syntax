@@ -338,6 +338,13 @@ button {
 #pane-divider.dragging {
   background: var(--accent);
 }
+/* Split ratio from the divider; a single visible pane always fills the width. */
+body.split:not(.comparing) #pane-0 {
+  flex-grow: var(--split-left, 1);
+}
+body.split:not(.comparing) #pane-1 {
+  flex-grow: var(--split-right, 1);
+}
 body:not(.split) #pane-1,
 body:not(.split) #pane-divider,
 body.comparing #pane-1,

@@ -178,11 +178,12 @@ function initDropZone(): void {
 /** Drag the divider between the two views. */
 function initPaneDivider(): void {
   const divider = $('pane-divider');
-  const left = $('pane-0');
-  const right = $('pane-1');
+  // The ratio is applied through CSS variables that only take effect while split (see
+  // app.css). A lone pane with flex-grow < 1 would only fill that fraction of the width.
+  const panes = $('panes');
   const apply = (ratio: number) => {
-    left.style.flexGrow = String(ratio);
-    right.style.flexGrow = String(1 - ratio);
+    panes.style.setProperty('--split-left', String(ratio));
+    panes.style.setProperty('--split-right', String(1 - ratio));
   };
   divider.addEventListener('pointerdown', (e) => {
     e.preventDefault();
