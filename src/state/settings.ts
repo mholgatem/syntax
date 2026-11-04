@@ -22,6 +22,10 @@ export interface Settings {
   sidebarWidth: number;
   /** Width of the left view as a fraction of the workspace, when split. */
   splitRatio: number;
+  /** Show a rendered preview beside markdown tabs. */
+  markdownPreview: boolean;
+  /** Width of the editor beside the markdown preview, as a fraction of the view. */
+  previewRatio: number;
 }
 
 export type SidebarTab = 'outline' | 'search';
@@ -43,6 +47,8 @@ export const DEFAULT_SETTINGS: Settings = {
   sidebarTab: 'outline',
   sidebarWidth: 300,
   splitRatio: 0.5,
+  markdownPreview: false,
+  previewRatio: 0.5,
 };
 
 const KEY = 'syntax.settings.v1';

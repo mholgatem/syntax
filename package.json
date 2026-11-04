@@ -12,8 +12,10 @@
     "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
+    "dompurify": "^3.4.15",
     "fflate": "^0.8.3",
     "idb-keyval": "^6.3.0",
+    "marked": "^14.0.0",
     "monaco-editor": "^0.57.0"
   },
   "devDependencies": {

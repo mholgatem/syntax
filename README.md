@@ -14,6 +14,9 @@ text editor. It runs entirely in your browser (files are never uploaded) and is 
 - **Split view**: two editors side by side, each with its own tabs, as in Notepad++. Right-click a tab for
   *Move to Other View* or *Clone to Other View*. A clone shows the same file in both views, so edits appear in both.
   You can also drag tabs between the views.
+- **Markdown preview** (Ctrl+Shift+V, View menu or toolbar): a live rendered view beside any Markdown tab that
+  updates as you type and follows the editor's scroll position. Code blocks are syntax highlighted and the
+  divider can be dragged. Raw HTML in the file is sanitized; remote images and links work as on the web.
 - **HDL tools** for Verilog, SystemVerilog and VHDL:
   - **Outline** panel (Alt+O): modules, entities, ports, parameters, signals, processes, instances and
     generate blocks. Click an item to jump to it; the item under the cursor is highlighted.

@@ -23,6 +23,7 @@ import { initSidebar, showSidebarTab } from './ui/sidebar';
 import { initOutline } from './ui/outline';
 import { initSearchPanel, openSearchPanel } from './ui/searchPanel';
 import { initPwa } from './pwa';
+import { initMarkdownPreview } from './ui/markdownPreview';
 import {
   buildMenus,
   closeDoc,
@@ -37,6 +38,7 @@ import {
   saveAs,
   setFileInput,
   toggleDarkMode,
+  toggleMarkdownPreview,
 } from './commands';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -66,6 +68,7 @@ function initToolbar(root: HTMLElement): void {
     'sep',
     { icon: 'list-tree', title: 'Outline (Alt+O)', run: () => showSidebarTab('outline', true), id: 'tb-outline' },
     { icon: 'search-fuzzy', title: 'Find in All Tabs (Ctrl+Shift+F)', run: openSearchPanel, id: 'tb-search' },
+    { icon: 'open-preview', title: 'Markdown Preview (Ctrl+Shift+V)', run: toggleMarkdownPreview, id: 'tb-preview' },
     'sep',
     { icon: 'color-mode', title: 'Toggle Light/Dark', run: toggleDarkMode },
   ];
@@ -92,6 +95,7 @@ function initToolbar(root: HTMLElement): void {
     $('tb-compare').classList.toggle('on', !!getCompare());
     $('tb-outline').classList.toggle('on', s.sidebarOpen && s.sidebarTab === 'outline');
     $('tb-search').classList.toggle('on', s.sidebarOpen && s.sidebarTab === 'search');
+    $('tb-preview').classList.toggle('on', s.markdownPreview);
     ($('tb-save-all') as HTMLButtonElement).disabled = !store.anyDirty();
   };
   settings.subscribe(syncToggles);
@@ -221,6 +225,7 @@ function initWelcome(): void {
 async function main(): Promise<void> {
   initTheme();
   initEditors([$('editor-host'), $('editor-host-2')], $('diff-host'));
+  initMarkdownPreview();
   initMenuBar($('menubar'), buildMenus());
   initToolbar($('toolbar'));
   const tabActions = {
