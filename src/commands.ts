@@ -32,6 +32,7 @@ import { encodingMenuItems, eolMenuItems, indentMenuItems, languageMenuItems } f
 import { showSidebarTab } from './ui/sidebar';
 import { openSearchPanel } from './ui/searchPanel';
 import { canInstall, promptInstall } from './pwa';
+import { isMarkdown } from './ui/markdownPreview';
 
 let fileInput: HTMLInputElement;
 export function setFileInput(input: HTMLInputElement): void {
@@ -187,6 +188,12 @@ function zoom(delta: number | null): void {
 
 type BoolSetting = 'wordWrap' | 'renderWhitespace' | 'minimap' | 'lineNumbers' | 'diffInline' | 'diffIgnoreWhitespace' | 'autoAlign';
 const toggle = (key: BoolSetting) => settings.update({ [key]: !settings.get()[key] });
+
+export function toggleMarkdownPreview(): void {
+  const on = !settings.get().markdownPreview;
+  settings.update({ markdownPreview: on });
+  if (on && !store.docs.some(isMarkdown)) toast('The preview appears beside Markdown files.');
+}
 
 export function toggleDarkMode(): void {
   const { mode } = settings.get();
@@ -358,6 +365,7 @@ export function buildMenus(): Menu[] {
         { label: 'Show Whitespace', checked: () => settings.get().renderWhitespace, action: () => toggle('renderWhitespace') },
         { label: 'Line Numbers', checked: () => settings.get().lineNumbers, action: () => toggle('lineNumbers') },
         { label: 'Minimap', checked: () => settings.get().minimap, action: () => toggle('minimap') },
+        { label: 'Markdown Preview', shortcut: 'Ctrl+Shift+V', checked: () => settings.get().markdownPreview, action: toggleMarkdownPreview },
         'separator',
         {
           label: 'Outline',
@@ -478,6 +486,7 @@ const SHORTCUTS: Shortcut[] = [
   { key: 'z', alt: true, run: () => toggle('wordWrap') },
   { key: 'o', alt: true, run: () => showSidebarTab('outline', true) },
   { key: 'f', ctrl: true, shift: true, run: openSearchPanel },
+  { key: 'v', ctrl: true, shift: true, run: toggleMarkdownPreview },
   { key: 'f8', run: switchView },
   { key: '=', ctrl: true, run: () => zoom(1) },
   { key: '+', ctrl: true, shift: true, run: () => zoom(1) },
@@ -538,6 +547,7 @@ const SHORTCUT_ROWS: [string, string][] = [
   ['Go to / peek definition', 'F12 or Ctrl+Click / Alt+F12'],
   ['Bookmark: toggle / next / previous', 'Ctrl+F2 / F2 / Shift+F2  (or click the margin)'],
   ['Outline panel', 'Alt+O'],
+  ['Markdown preview', 'Ctrl+Shift+V'],
   ['Align statements (HDL)', 'Ctrl+Alt+A'],
   ['Format document', 'Shift+Alt+F'],
   ['Duplicate / delete line', 'Ctrl+D / Ctrl+Shift+K'],
