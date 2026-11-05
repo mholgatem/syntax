@@ -1166,3 +1166,76 @@ table.shortcuts kbd {
     transition: none;
   }
 }
+
+/* ---------- installed-app welcome splash ---------- */
+.modal.splash {
+  --neon-a: #ff3fd8;
+  --neon-b: #36d6ff;
+  width: min(560px, 100%);
+  padding: 0 0 18px;
+  color: #e9e6f5;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background:
+    linear-gradient(#17112a, #120d22) padding-box,
+    linear-gradient(135deg, var(--neon-a), #8b5cff 50%, var(--neon-b)) border-box;
+  box-shadow:
+    0 0 28px rgb(255 63 216 / 0.28),
+    0 0 48px rgb(54 214 255 / 0.18),
+    0 18px 50px rgb(0 0 0 / 0.5);
+}
+.modal.splash .modal-banner {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1672 / 941;
+  object-fit: cover;
+  border-radius: 13px 13px 0 0;
+  background: #120d22;
+}
+.modal.splash h2 {
+  margin: 16px 22px 8px;
+  font-size: 19px;
+  background: linear-gradient(90deg, var(--neon-a), var(--neon-b));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.modal.splash .modal-body,
+.modal.splash .modal-buttons {
+  margin-left: 22px;
+  margin-right: 22px;
+}
+.modal.splash .modal-body {
+  line-height: 1.5;
+}
+.modal.splash .muted {
+  color: #a49dbd;
+}
+.modal.splash .modal-buttons button {
+  color: #e9e6f5;
+  background: rgb(255 255 255 / 0.06);
+  border-color: rgb(255 255 255 / 0.18);
+}
+.modal.splash .modal-buttons button:hover {
+  background: rgb(255 255 255 / 0.12);
+}
+.modal.splash .modal-buttons button.primary {
+  border: none !important;
+  background: linear-gradient(90deg, var(--neon-a), #8b5cff, var(--neon-b)) !important;
+  color: #fff;
+  font-weight: 600;
+}
+.script-steps ol {
+  margin: 0 0 10px;
+  padding-left: 20px;
+}
+.script-steps li + li {
+  margin-top: 6px;
+}
+.script-steps code {
+  font-family: 'Cascadia Code', Consolas, monospace;
+  font-size: 0.95em;
+}
+.script-steps .muted {
+  color: var(--muted);
+}

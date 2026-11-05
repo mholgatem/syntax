@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/readme-banner.png" alt="Syntax" width="100%"></p>
+
 # Syntax
 
 A fast, private, browser-based code editor with the everyday features of a desktop
@@ -47,6 +49,10 @@ text editor. It runs entirely in your browser (files are never uploaded) and is 
 - **Recent files** (Chrome / Edge): *File → Recent Files* reopens recently closed files from disk.
 - **Installable app**: Chrome and Edge can install Syntax (*File → Install as App…* or the address bar). It then
   works offline, and the OS *Open with* menu can send source files straight to it.
+- **File icons on Windows**: browsers register an installed web app's file types without an icon, so files
+  that open with Syntax show a blank page. It doesn't affect how they open. *Settings → Fix-icons script* downloads
+  a PowerShell script (right-click → *Run with PowerShell*) that gives them the Syntax icon. It changes only your
+  own user settings (HKCU), needs no admin rights, and *Settings → Undo-icons script* reverses it.
 
 ## Keyboard shortcuts
 

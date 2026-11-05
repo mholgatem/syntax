@@ -17,6 +17,10 @@ function openModal<T>(opts: {
   buttons: ButtonSpec<T>[];
   cancelValue: T;
   onOpen?: (dialog: HTMLElement) => void;
+  /** Extra class on the dialog, for special-purpose styling. */
+  className?: string;
+  /** Image shown across the top of the dialog, above the title. */
+  banner?: string;
   /** Called on Enter / primary button; may return a different value (e.g. input contents). */
   resolvePrimary?: () => T;
 }): Promise<T> {
@@ -28,6 +32,15 @@ function openModal<T>(opts: {
     dialog.className = 'modal';
     dialog.setAttribute('role', 'dialog');
     dialog.setAttribute('aria-modal', 'true');
+    if (opts.className) dialog.classList.add(opts.className);
+
+    if (opts.banner) {
+      const img = document.createElement('img');
+      img.className = 'modal-banner';
+      img.src = opts.banner;
+      img.alt = '';
+      dialog.append(img);
+    }
 
     const h = document.createElement('h2');
     h.textContent = opts.title;
@@ -262,6 +275,17 @@ export function showInfo(title: string, body: HTMLElement | string): Promise<voi
     cancelValue: undefined,
     buttons: [{ label: 'Close', value: undefined, primary: true }],
   });
+}
+
+/** A wide, styled dialog with a banner image. Resolves to the chosen button's value. */
+export function showSplash<T>(opts: {
+  title: string;
+  banner: string;
+  body: HTMLElement;
+  buttons: ButtonSpec<T>[];
+  cancelValue: T;
+}): Promise<T> {
+  return openModal({ ...opts, className: 'splash' });
 }
 
 export function toast(

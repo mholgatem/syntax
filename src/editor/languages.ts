@@ -67,6 +67,56 @@ export const LANGUAGES: LanguageInfo[] = [
   { id: 'proto', label: 'Protocol Buffers', extensions: ['.proto'] },
 ];
 
+// ---------- file types the installed app registers with the OS ----------
+
+/**
+ * Extensions the installed app doesn't register for "Open with" / default-app use, because
+ * another program usually owns them (browsers, Notepad, Windows itself, IDE project files) or
+ * they're too generic. Files with these extensions still open and highlight normally.
+ */
+export const UNCLAIMED_EXTENSIONS = new Set([
+  '.html', '.htm', '.xhtml', '.shtml', '.phtml', '.svg', '.xsd', '.xsl',
+  '.txt', '.text', '.log', '.bat', '.cmd', '.vbs', '.pyw',
+  '.csproj', '.vcxproj', '.props', '.targets', '.code-workspace', '.gyp', '.gemspec', '.plist',
+  '.ip', '.qsys', '.svp', '.svi',
+  // Scripts that Windows (or their usual runtime) runs on double-click. Taking them over
+  // would also hide their "Run with ..." menu entries, which belong to the owning file type.
+  '.ps1', '.psm1', '.psd1', // PowerShell
+  '.js', // Windows Script Host
+  '.rbw', // Ruby, windowed (like .pyw)
+]);
+
+/** Registered or widely used MIME types; every other language gets `text/x-<id>`. */
+const MIME_OVERRIDES: Record<string, string> = {
+  c: 'text/x-csrc',
+  cpp: 'text/x-c++src',
+  javascript: 'text/javascript',
+  css: 'text/css',
+  markdown: 'text/markdown',
+  json: 'application/json',
+  xml: 'application/xml',
+  yaml: 'application/yaml',
+  sql: 'application/sql',
+};
+
+export function mimeTypeFor(id: string): string {
+  return MIME_OVERRIDES[id] ?? `text/x-${id}`;
+}
+
+/**
+ * The manifest `file_handlers[].accept` map: one MIME type per language family, each with
+ * the extensions the app claims. (Chromium registers file types on Windows by extension;
+ * the MIME types matter on other platforms and keep the families distinct.)
+ */
+export function fileHandlerAccept(): Record<string, string[]> {
+  const accept: Record<string, string[]> = {};
+  for (const lang of LANGUAGES) {
+    const exts = lang.extensions.filter((e) => !UNCLAIMED_EXTENSIONS.has(e));
+    if (exts.length) accept[mimeTypeFor(lang.id)] = exts;
+  }
+  return accept;
+}
+
 const byExt = new Map<string, LanguageInfo>();
 const byFilename = new Map<string, LanguageInfo>();
 const byId = new Map<string, LanguageInfo>();

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { unzipSync, strFromU8 } from 'fflate';
-import { detectLanguage, LANGUAGES } from '../src/editor/languages';
+import { detectLanguage, fileHandlerAccept, LANGUAGES, UNCLAIMED_EXTENSIONS } from '../src/editor/languages';
 import { buildZip, uniqueNames } from '../src/io/zip';
 import { decodeText, detectEol, encodeText, hashText, isProbablyBinary } from '../src/io/text';
 import { SCHEMES, toMonacoTheme } from '../src/editor/themes';
@@ -52,6 +52,38 @@ describe('detectLanguage', () => {
         seen.set(ext, l.id);
       }
     }
+  });
+});
+
+describe('fileHandlerAccept', () => {
+  const accept = fileHandlerAccept();
+  const claimed = Object.values(accept).flat();
+
+  it('gives each language family its own MIME type', () => {
+    expect(accept['text/x-verilog']).toContain('.v');
+    expect(accept['text/x-systemverilog']).toContain('.sv');
+    expect(accept['text/x-vhdl']).toEqual(['.vhd', '.vhdl', '.vho', '.vht']);
+    expect(accept['text/x-tcl']).toContain('.xdc');
+    expect(accept['text/x-python']).toEqual(['.py', '.pyi']);
+    expect(accept['text/plain']).toBeUndefined();
+    for (const mime of Object.keys(accept)) expect(mime).toMatch(/^(text|application)\/[a-z0-9.+-]+$/);
+  });
+
+  it('does not claim the excluded extensions', () => {
+    for (const ext of UNCLAIMED_EXTENSIONS) expect(claimed).not.toContain(ext);
+    // Families left with no extensions are dropped entirely.
+    expect(accept['text/x-html']).toBeUndefined();
+    expect(accept['text/x-bat']).toBeUndefined();
+  });
+
+  it('still detects languages for unclaimed extensions', () => {
+    expect(detectLanguage('index.html')).toBe('html');
+    expect(detectLanguage('notes.txt')).toBe('plaintext');
+    expect(detectLanguage('x.svi')).toBe('systemverilog');
+  });
+
+  it('claims each extension once', () => {
+    expect(new Set(claimed).size).toBe(claimed.length);
   });
 });
 
