@@ -1239,3 +1239,51 @@ table.shortcuts kbd {
 .script-steps .muted {
   color: var(--muted);
 }
+.unblock-warning {
+  margin: 4px 0 14px;
+  padding: 10px 12px 4px;
+  color: var(--fg);
+  background: color-mix(in srgb, var(--danger) 12%, var(--bg));
+  border: 2px solid var(--danger);
+  border-left-width: 6px;
+  border-radius: 6px;
+}
+.unblock-warning .unblock-title {
+  margin: 0 0 6px;
+  color: var(--danger);
+  font-size: 15px;
+  font-weight: 700;
+}
+.unblock-warning .codicon {
+  vertical-align: -3px;
+}
+.modal-footer-extra {
+  margin-right: auto;
+}
+.splash-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #a49dbd;
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+.splash-check input {
+  margin: 0;
+  accent-color: #ff3fd8;
+}
+.modal-buttons {
+  align-items: center;
+}
+.script-steps .then {
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+.script-steps kbd {
+  padding: 0 4px;
+  font: 0.92em 'Cascadia Code', Consolas, monospace;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg);
+}

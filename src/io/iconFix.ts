@@ -1,3 +1,5 @@
+import { buildZip } from './zip';
+
 // Windows file-type icons for the installed app.
 //
 // When the installed web app becomes the default program for a file type, the browser
@@ -12,6 +14,8 @@ export const BACKUP_KEY = 'Software\\Syntax\\FileIconFix';
 
 export const FIX_SCRIPT_NAME = 'Syntax-Fix-Icons.ps1';
 export const UNDO_SCRIPT_NAME = 'Syntax-Undo-Icons.ps1';
+export const INSTRUCTIONS_NAME = 'Syntax-Icons-Instructions.txt';
+export const ZIP_NAME = 'Syntax-Icon-Scripts.zip';
 
 const ICO_SIZES = [16, 24, 32, 48, 64, 128, 256];
 
@@ -268,4 +272,95 @@ try {
 }
 Finish
 `);
+}
+
+/** Plain-text instructions shipped in the zip next to the scripts (ASCII, CRLF). */
+export function instructionsText(): string {
+  return crlf(`SYNTAX - FILE ICON SCRIPTS
+==========================
+
+Installed web apps can't assign a custom icon to the file types they open, so
+files that open with Syntax show a blank page icon. These scripts fix that, and
+undo the fix if you change your mind.
+
+  ${FIX_SCRIPT_NAME}    Gives files that open with Syntax the Syntax icon.
+  ${UNDO_SCRIPT_NAME}   Restores the original icons and removes the fix.
+
+Both only change the current Windows user's settings (HKEY_CURRENT_USER).
+No admin rights are required. As always, use caution when running scripts you
+didn't write: open them in Notepad to read exactly what they do.
+
+
+1. UNBLOCK FIRST
+----------------
+Windows blocks scripts downloaded from the internet. Unblock the zip BEFORE
+extracting it, and the extracted scripts are unblocked too:
+
+  1. Right-click ${ZIP_NAME} and choose Properties.
+  2. On the General tab, next to "Security" at the bottom, tick Unblock,
+     then click OK.
+  3. Right-click the zip and choose Extract All.
+
+Already extracted it? Unblock each .ps1 file the same way instead.
+
+
+2. FIX THE ICONS
+----------------
+Right-click ${FIX_SCRIPT_NAME} and choose Run with PowerShell
+(on Windows 11 it may be under "Show more options").
+
+A window lists the file types it updated; press Enter to close it. Icons
+refresh right away. If some still look blank, sign out of Windows and back in.
+
+Reinstalling Syntax may reset the icons. Just run the script again.
+
+
+3. UNDO THE FIX
+---------------
+Right-click ${UNDO_SCRIPT_NAME} and choose Run with PowerShell.
+
+
+DRY RUN: PREVIEW WITHOUT CHANGING ANYTHING
+------------------------------------------
+Either script can list what it would change, without changing anything:
+
+  1. Open the folder with the scripts in File Explorer.
+  2. Click the address bar, type  powershell  and press Enter.
+  3. In the window that opens, run:
+
+       powershell -ExecutionPolicy Bypass -File .\${FIX_SCRIPT_NAME} -DryRun
+
+     or, for the undo script:
+
+       powershell -ExecutionPolicy Bypass -File .\${UNDO_SCRIPT_NAME} -DryRun
+
+"-ExecutionPolicy Bypass" only applies to that one command.
+
+
+TROUBLESHOOTING
+---------------
+* The PowerShell window flashes and closes right away:
+  the script is still blocked, or this PC is set not to run scripts at all.
+  Follow the DRY RUN steps, but leave off -DryRun to make the change:
+
+       powershell -ExecutionPolicy Bypass -File .\${FIX_SCRIPT_NAME}
+
+* "No file types are registered to the installed Syntax app yet":
+  install Syntax from your browser and make it the default app for at least
+  one file type (right-click a file > Open with > Choose another app), then
+  run the script again.
+
+* On a work or school PC, scripts may be disabled by your organization.
+  Ask your IT department.
+`);
+}
+
+/** The zip offered for download: both scripts plus the instructions. */
+export function buildIconScriptsZip(icoBase64: string): Uint8Array {
+  const enc = new TextEncoder();
+  return buildZip([
+    { name: FIX_SCRIPT_NAME, data: enc.encode(fixIconsScript(icoBase64)) },
+    { name: UNDO_SCRIPT_NAME, data: enc.encode(undoIconsScript()) },
+    { name: INSTRUCTIONS_NAME, data: enc.encode(instructionsText()) },
+  ]);
 }

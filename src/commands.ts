@@ -33,7 +33,7 @@ import { showSidebarTab } from './ui/sidebar';
 import { openSearchPanel } from './ui/searchPanel';
 import { canInstall, promptInstall } from './pwa';
 import { isMarkdown } from './ui/markdownPreview';
-import { downloadIconScript, isWindows } from './ui/iconNotice';
+import { downloadIconScripts, isWindows } from './ui/iconNotice';
 
 let fileInput: HTMLInputElement;
 export function setFileInput(input: HTMLInputElement): void {
@@ -457,8 +457,9 @@ export function buildMenus(): Menu[] {
         ...(isWindows()
           ? ([
               'separator',
-              { label: 'Fix-icons script', action: () => void downloadIconScript('fix') },
-              { label: 'Undo-icons script', action: () => void downloadIconScript('undo') },
+              // Both download the same zip (fix + undo scripts and instructions).
+              { label: 'Fix-icons script', action: () => void downloadIconScripts() },
+              { label: 'Undo-icons script', action: () => void downloadIconScripts() },
             ] as MenuItem[])
           : []),
         'separator',

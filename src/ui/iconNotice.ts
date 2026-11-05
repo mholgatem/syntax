@@ -1,19 +1,10 @@
 import { settings } from '../state/settings';
 import { downloadBlob } from '../io/saveFiles';
-import {
-  FIX_SCRIPT_NAME,
-  UNDO_SCRIPT_NAME,
-  buildIco,
-  fixIconsScript,
-  renderIconPngs,
-  toBase64,
-  undoIconsScript,
-} from '../io/iconFix';
+import { FIX_SCRIPT_NAME, ZIP_NAME, buildIco, buildIconScriptsZip, renderIconPngs, toBase64 } from '../io/iconFix';
 import { showInfo, showSplash, toast } from './dialogs';
 
-// The welcome splash shown the first time Syntax runs as an installed app on Windows,
-// explaining the blank file-type icons, and the Settings commands that download the
-// fix / undo scripts (see io/iconFix.ts).
+// The welcome splash shown when Syntax starts as an installed app on Windows, explaining
+// the blank file-type icons, and the download of the fix / undo scripts (see io/iconFix.ts).
 
 const asset = (path: string) => `${import.meta.env.BASE_URL}${path}`;
 
@@ -30,72 +21,123 @@ export function isInstalledApp(): boolean {
   return ['standalone', 'window-controls-overlay'].some((m) => window.matchMedia(`(display-mode: ${m})`).matches);
 }
 
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, className?: string): HTMLElementTagNameMap[K] {
+type Part = string | Node;
+
+/** An element whose children are text and nodes, e.g. rich('p', 'Press ', strong('OK')). */
+function rich<K extends keyof HTMLElementTagNameMap>(tag: K, ...parts: Part[]): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
-  if (text) e.textContent = text;
-  if (className) e.className = className;
+  e.append(...parts);
+  return e;
+}
+const strong = (t: string) => rich('strong', t);
+const em = (t: string) => rich('em', t);
+const code = (t: string) => rich('code', t);
+function withClass<T extends HTMLElement>(e: T, className: string): T {
+  e.className = className;
   return e;
 }
 
-/** Build a script, download it, and show how to run it. */
-export async function downloadIconScript(kind: 'fix' | 'undo'): Promise<void> {
-  let text: string;
+/** Generate the zip (both scripts + instructions), download it, and show how to use it. */
+export async function downloadIconScripts(): Promise<void> {
+  let zip: Uint8Array;
   try {
-    text = kind === 'fix' ? fixIconsScript(toBase64(buildIco(await renderIconPngs(asset('icons/icon-512.png'))))) : undoIconsScript();
+    zip = buildIconScriptsZip(toBase64(buildIco(await renderIconPngs(asset('icons/icon-512.png')))));
   } catch (err) {
-    toast(`Could not create the script: ${String(err)}`, 'error');
+    toast(`Could not create the scripts: ${String(err)}`, 'error');
     return;
   }
-  const name = kind === 'fix' ? FIX_SCRIPT_NAME : UNDO_SCRIPT_NAME;
-  downloadBlob(name, new TextEncoder().encode(text), 'text/plain');
+  downloadBlob(ZIP_NAME, zip, 'application/zip');
 
-  const body = el('div', undefined, 'script-steps');
+  const body = withClass(rich('div'), 'script-steps');
   body.append(
-    el('p', kind === 'fix' ? 'The script that gives your files the Syntax icon is downloading.' : 'The script that restores the original file icons is downloading.'),
-  );
-  const ol = el('ol');
-  const step1 = el('li', 'Open your ');
-  step1.append(el('strong', 'Downloads'), document.createTextNode(' folder. If your browser asks whether to keep the file, choose '), el('strong', 'Keep'), document.createTextNode('.'));
-  const step2 = el('li', 'Right-click ');
-  step2.append(el('code', name), document.createTextNode(' and choose '), el('strong', 'Run with PowerShell'), document.createTextNode('. On Windows 11 it may be under '), el('em', 'Show more options'), document.createTextNode('.'));
-  const step3 = el('li', kind === 'fix' ? 'A window lists the file types it updated. Icons refresh right away; if some still look blank, sign out and back in.' : 'A window lists what it restored, then you can close it.');
-  ol.append(step1, step2, step3);
-  body.append(ol);
-  body.append(
-    el(
+    rich(
       'p',
-      kind === 'fix'
-        ? 'It only changes your own Windows user settings and needs no admin rights. Reinstalling Syntax can reset the icons; just run the script again. To undo it, use Settings → Undo-icons script.'
-        : 'It only changes your own Windows user settings and needs no admin rights.',
+      'The fix-icons and undo-icons scripts are downloading as ',
+      code(ZIP_NAME),
+      ', along with instructions. If your browser asks whether to keep it, choose ',
+      strong('Keep'),
+      '.',
+    ),
+  );
+
+  // Windows blocks downloaded scripts until they're unblocked, so lead with that. Unblocking
+  // the zip before extracting it unblocks both scripts at once.
+  const warn = withClass(rich('div'), 'unblock-warning');
+  warn.setAttribute('role', 'alert');
+  warn.append(
+    withClass(rich('p', withClass(rich('span'), 'codicon codicon-warning'), ' You must UNBLOCK this zip before extracting it.'), 'unblock-title'),
+    rich(
+      'ol',
+      rich('li', 'Navigate to ', code(ZIP_NAME), ' (', strong('Ctrl+J'), ', then ', strong('Show in folder'), ').'),
+      rich('li', 'Right-click it and choose ', strong('Properties'), '.'),
+      rich('li', 'On the ', strong('General'), ' tab, at the bottom next to ', em('Security'), ', tick ', strong('Unblock'), ', then click ', strong('OK'), '.'),
+    ),
+  );
+  body.append(warn);
+
+  body.append(
+    withClass(rich('p', 'Then run it:'), 'then'),
+    rich(
+      'ol',
+      rich('li', 'Right-click the zip and choose ', strong('Extract All'), '.'),
+      rich(
+        'li',
+        'In the extracted folder, right-click ',
+        code(FIX_SCRIPT_NAME),
+        ' and choose ',
+        strong('Run with PowerShell'),
+        '. On Windows 11 it may be under ',
+        em('Show more options'),
+        '.',
+      ),
+      rich('li', 'A window lists the file types it updated. Icons refresh right away; if some still look blank, sign out and back in.'),
+    ),
+    rich('p', 'The instructions in the zip also explain how to preview the changes first with a dry run.'),
+    withClass(
+      rich(
+        'p',
+        'This script only changes the current Windows user settings. No admin rights are required. Reinstalling Syntax may reset the icons; just run the script again. To undo it, run the undo-icons script.',
+      ),
       'muted',
     ),
   );
-  await showInfo(kind === 'fix' ? 'Fix file icons' : 'Undo file icon fix', body);
+  await showInfo('Fix icons', body);
 }
 
-/** Show the welcome splash once, the first time Syntax runs as an installed app on Windows. */
+/** Show the welcome splash at startup when running as an installed app on Windows. */
 export async function maybeShowIconNotice(): Promise<void> {
-  if (settings.get().iconNoticeSeen || !isWindows() || !isInstalledApp()) return;
-  const body = el('div');
-  body.append(
-    el('p', 'Syntax is installed and can open files straight from File Explorer.'),
-    el(
+  if (!settings.get().welcomeSplash || !isWindows() || !isInstalledApp()) return;
+  const body = rich(
+    'div',
+    rich('p', 'Now that Syntax is installed, you can open code files straight from File Explorer.'),
+    rich(
       'p',
-      'One catch: installed web apps can’t give their file types an icon in Windows, so files that open with Syntax show a blank page icon. This is a browser limitation and doesn’t affect opening, editing or saving.',
+      rich('strong', em('One catch:')),
+      ' Due to browser limitations, web apps can’t assign a custom icon to associated filetypes, so files that open with Syntax will show a blank page icon.',
     ),
-    el('p', 'If you’d like the Syntax icon on those files, download the fix-icons script. You can undo it at any time.'),
-    el('p', 'Both scripts are also under Settings.', 'muted'),
+    rich(
+      'p',
+      'If you’d like the Syntax icon on those files, we can generate a script for you. You can undo it at anytime with the companion undo-icons script. ',
+      em('As always, use caution when running unknown scripts.'),
+    ),
+    withClass(rich('p', 'If you’d like to handle this later, both scripts can be generated from the Settings menu.'), 'muted'),
   );
+
+  const dontShow = document.createElement('input');
+  dontShow.type = 'checkbox';
+  const checkLabel = withClass(rich('label', dontShow, ' Don’t show this splash at startup'), 'splash-check');
+
   const choice = await showSplash({
     title: 'Welcome to Syntax',
     banner: asset('images/Syntax-Neon-Splash.png'),
     body,
+    footerExtra: checkLabel,
     cancelValue: 'close' as const,
     buttons: [
       { label: 'Got it', value: 'close' as const },
-      { label: 'Get Fix-icons script', value: 'fix' as const, primary: true },
+      { label: 'Generate scripts', value: 'generate' as const, primary: true },
     ],
   });
-  settings.update({ iconNoticeSeen: true });
-  if (choice === 'fix') await downloadIconScript('fix');
+  if (dontShow.checked) settings.update({ welcomeSplash: false });
+  if (choice === 'generate') await downloadIconScripts();
 }
