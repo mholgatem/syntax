@@ -104,7 +104,7 @@ src/ui/                  editor views, tab bars, menu bar, status bar, side pane
 vite-pwa.ts              build plugin that emits the web app manifest and the offline service worker
 tests/                   unit tests
 scripts/smoke.mjs        browser smoke test
-scripts/make-icons.mjs   renders public/icons/*.png from public/favicon.svg
+scripts/make-icons.mjs   renders the favicon PNGs in public/icons/ from public/icons/icon-512.png
 ```
 
 ## Deployment
