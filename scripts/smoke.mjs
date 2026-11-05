@@ -622,7 +622,7 @@ const pwaInfo = await nf.evaluate(async () => {
   const reg = await Promise.race([navigator.serviceWorker.ready, new Promise((r) => setTimeout(() => r(null), 5000))]);
   const href = document.querySelector('link[rel="manifest"]')?.href;
   const manifest = href ? await (await fetch(href)).json() : null;
-  return { sw: !!reg, accepts: manifest?.file_handlers?.[0]?.accept?.['text/plain'] ?? [] };
+  return { sw: !!reg, accepts: Object.values(manifest?.file_handlers?.[0]?.accept ?? {}).flat() };
 });
 check(pwaInfo.sw, 'service worker is registered');
 check(['.v', '.sv', '.vhd'].every((e) => pwaInfo.accepts.includes(e)), 'manifest registers HDL file handlers');

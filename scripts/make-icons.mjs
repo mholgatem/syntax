@@ -1,30 +1,44 @@
-// Render the PWA icons in public/icons/ from public/favicon.svg (run once after changing the logo).
-// Uses the locally installed Chrome via playwright-core:  node scripts/make-icons.mjs
+// Render the browser-tab favicons in public/icons/ from public/icons/icon-512.png (the app
+// icon, which is drawn by hand). Run after changing the icon:  node scripts/make-icons.mjs
+// Uses the locally installed Chrome via playwright-core. Halves the image step by step so
+// the small sizes stay crisp.
 import { chromium } from 'playwright-core';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 
-const svg = readFileSync('public/favicon.svg', 'utf8');
+const SIZES = [16, 32, 48];
+const src = `data:image/png;base64,${readFileSync('public/icons/icon-512.png').toString('base64')}`;
 const CHROME = process.env.CHROME_PATH ?? 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-mkdirSync('public/icons', { recursive: true });
 const browser = await chromium.launch({ executablePath: CHROME, headless: true });
+const page = await browser.newPage();
 
-async function render(file, size, maskable) {
-  const page = await browser.newPage({ viewport: { width: size, height: size } });
-  // Maskable icons need the logo inside the central 80% "safe zone" on a full-bleed background.
-  const inner = maskable
-    ? `<div style="width:100%;height:100%;background:#1e6fd9;display:grid;place-items:center">
-         <div style="width:72%;height:72%">${svg.replace('<rect width="32" height="32" rx="7" fill="#1e6fd9"/>', '')}</div></div>`
-    : svg;
-  await page.setContent(
-    `<html><body style="margin:0;background:transparent"><div style="width:${size}px;height:${size}px">${inner}</div>
-     <style>svg{width:100%;height:100%;display:block}</style></body></html>`,
-  );
-  await page.screenshot({ path: `public/icons/${file}`, omitBackground: true });
-  await page.close();
-}
+const pngs = await page.evaluate(
+  async ({ src, sizes }) => {
+    const img = new Image();
+    img.src = src;
+    await img.decode();
+    const draw = (source, size) => {
+      const c = document.createElement('canvas');
+      c.width = c.height = size;
+      const ctx = c.getContext('2d');
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(source, 0, 0, size, size);
+      return c;
+    };
+    const out = {};
+    for (const size of sizes) {
+      let source = img;
+      let w = img.naturalWidth;
+      while (w / 2 >= size) {
+        w = Math.round(w / 2);
+        source = draw(source, w);
+      }
+      out[size] = draw(source, size).toDataURL('image/png').split(',')[1];
+    }
+    return out;
+  },
+  { src, sizes: SIZES },
+);
 
-await render('icon-192.png', 192, false);
-await render('icon-512.png', 512, false);
-await render('icon-maskable-512.png', 512, true);
+for (const size of SIZES) writeFileSync(`public/icons/favicon-${size}.png`, Buffer.from(pngs[size], 'base64'));
 await browser.close();
-console.log('Wrote public/icons/icon-192.png, icon-512.png, icon-maskable-512.png');
+console.log(`Wrote ${SIZES.map((s) => `public/icons/favicon-${s}.png`).join(', ')}`);
