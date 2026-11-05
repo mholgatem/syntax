@@ -3,7 +3,7 @@ import { unzipSync, strFromU8 } from 'fflate';
 import { detectLanguage, fileHandlerAccept, LANGUAGES, UNCLAIMED_EXTENSIONS } from '../src/editor/languages';
 import { buildZip, uniqueNames } from '../src/io/zip';
 import { decodeText, detectEol, encodeText, hashText, isProbablyBinary } from '../src/io/text';
-import { SCHEMES, toMonacoTheme } from '../src/editor/themes';
+import { SCHEMES, getScheme, schemeMode, toMonacoTheme } from '../src/editor/themes';
 
 describe('detectLanguage', () => {
   it.each([
@@ -140,11 +140,32 @@ describe('themes', () => {
   it('every scheme produces valid light and dark Monaco themes', () => {
     for (const s of SCHEMES) {
       for (const mode of ['light', 'dark'] as const) {
-        const t = toMonacoTheme(s[mode], mode);
+        const t = toMonacoTheme(s[mode], mode, s.extraRules, s.extraColors);
         expect(t.base).toBe(mode === 'dark' ? 'vs-dark' : 'vs');
         for (const r of t.rules) expect(r.foreground).toMatch(/^[0-9a-f]{6}$/i);
         for (const c of Object.values(t.colors)) expect(c).toMatch(/^#[0-9a-f]{6}([0-9a-f]{2})?$/i);
       }
     }
+  });
+
+  it('keeps Syntax and Mode 13h dark in either mode', () => {
+    for (const id of ['syntax', 'mode13h']) {
+      expect(schemeMode(getScheme(id), 'light')).toBe('dark');
+      expect(schemeMode(getScheme(id), 'dark')).toBe('dark');
+    }
+    expect(schemeMode(getScheme('default'), 'light')).toBe('light');
+  });
+
+  it('colors HDL data types apart from other keywords in the vaporwave schemes', () => {
+    const s = getScheme('syntax');
+    const t = toMonacoTheme(s.dark, 'dark', s.extraRules);
+    const color = (token: string) => [...t.rules].reverse().find((r) => r.token === token)?.foreground;
+    expect(color('keyword.logic')).toBe(s.dark.type.slice(1));
+    expect(color('keyword')).toBe(s.dark.keyword.slice(1));
+    expect(s.dark.moduleName).toBeTruthy();
+    expect(getScheme('mode13h').effects).toMatchObject({ crt: true, cursorStyle: 'block' });
+    // Other schemes are unchanged: no module-name color, no extra rules.
+    expect(getScheme('default').dark.moduleName).toBeUndefined();
+    expect(getScheme('default').extraRules).toBeUndefined();
   });
 });

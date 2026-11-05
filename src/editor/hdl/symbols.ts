@@ -65,6 +65,32 @@ export function walkSymbols(symbols: HdlSymbol[], fn: (s: HdlSymbol, parent: Hdl
   }
 }
 
+const DESIGN_UNITS: ReadonlySet<HdlKind> = new Set(['module', 'interface', 'program', 'package', 'entity', 'component']);
+
+/**
+ * Source ranges of module / entity names, for highlighting: the name of each design unit
+ * declaration, and the instantiated module in each instance (`alu u0 (...)`,
+ * `u0: entity work.alu`). Offsets are into `text`, end exclusive.
+ */
+export function moduleNameRanges(symbols: HdlSymbol[], text: string): { start: number; end: number }[] {
+  const out: { start: number; end: number }[] = [];
+  walkSymbols(symbols, (s) => {
+    if (DESIGN_UNITS.has(s.kind)) {
+      out.push({ start: s.nameStart, end: s.nameEnd });
+    } else if (s.kind === 'instance' && s.of) {
+      // The module name sits before the instance name in Verilog and after it in VHDL
+      // (where `of` may be qualified, e.g. work.alu): find it as a whole word.
+      const name = s.of.split('.').pop()!;
+      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(`(?<![\\w$])${escaped}(?![\\w$])`, 'gi');
+      re.lastIndex = s.start;
+      const m = re.exec(text);
+      if (m && m.index < s.end) out.push({ start: m.index, end: m.index + name.length });
+    }
+  });
+  return out.sort((a, b) => a.start - b.start);
+}
+
 /** The innermost symbol whose range contains `offset`, with its ancestors (outermost first). */
 export function symbolPathAt(symbols: HdlSymbol[], offset: number): HdlSymbol[] {
   const path: HdlSymbol[] = [];

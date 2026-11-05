@@ -32,6 +32,18 @@ export interface Palette {
   hover: string;
   diffInsert: string;
   diffRemove: string;
+  /** HDL module / entity names (decorations, see hdl/monacoHdl.ts). Unset: normal token color. */
+  moduleName?: string;
+}
+
+/** Extras for special schemes. */
+export interface SchemeEffects {
+  /** CRT look: scan-lines and glow (styled in app.css under :root[data-crt]). */
+  crt?: true;
+  cursorStyle?: 'block';
+  fontFamily?: string;
+  /** Added to the editor font size (small pixel fonts need a bump). */
+  fontSizeDelta?: number;
 }
 
 export interface Scheme {
@@ -39,6 +51,13 @@ export interface Scheme {
   label: string;
   light: Palette;
   dark: Palette;
+  /** Always rendered dark, whatever the Light/Dark setting. */
+  darkOnly?: true;
+  /** Extra Monaco token rules, applied after the defaults. */
+  extraRules?: Monaco.editor.ITokenThemeRule[];
+  /** Extra Monaco UI colors, applied after the defaults. */
+  extraColors?: Record<string, string>;
+  effects?: SchemeEffects;
 }
 
 type Mode = 'light' | 'dark';
@@ -202,7 +221,72 @@ const SCHEMES_DATA: Scheme[] = [
   },
 ];
 
+// ---------- vaporwave: "Syntax" and "Mode 13h" ----------
+
+const VAPOR = {
+  fg: '#f2f0ff', comment: '#8478c4', keyword: '#3ee6ff', string: '#ff6ad5', number: '#ffa057',
+  type: '#a9b4ff', func: '#c792ff', constant: '#5cf2a0', operator: '#ff9de6', attribute: '#3ee6ff',
+  tag: '#ff6ad5', moduleName: '#ffe45e',
+  lineNumber: '#5d5a8c', lineNumberActive: '#ff6ad5', cursor: '#ff3fd8',
+  chromeFg: '#e9e6f5', chromeMuted: '#9a93c4', accent: '#ff3fd8',
+  diffInsert: '#3ee6ff2e', diffRemove: '#ff3fd833',
+} satisfies Partial<Palette>;
+
+/** HDL data-type keywords get the type color instead of the keyword color. */
+const VAPOR_RULES: Monaco.editor.ITokenThemeRule[] = [
+  ...['logic', 'int', 'integer', 'bit', 'byte', 'reg', 'wire', 'real', 'shortint', 'longint', 'shortreal', 'time', 'realtime', 'signed', 'unsigned', 'string', 'tri', 'uwire', 'genvar'].map(
+    (k) => ({ token: `keyword.${k}`, foreground: VAPOR.type.slice(1) }),
+  ),
+  { token: 'type', foreground: VAPOR.type.slice(1) },
+];
+
+/**
+ * Bracket-pair colors. HDL keyword pairs (module/endmodule, begin/end) are colored as
+ * brackets too, so the outermost level matches the keyword color.
+ */
+const VAPOR_COLORS: Record<string, string> = {
+  'editorBracketHighlight.foreground1': VAPOR.keyword,
+  'editorBracketHighlight.foreground2': VAPOR.string,
+  'editorBracketHighlight.foreground3': VAPOR.func,
+  'editorBracketHighlight.foreground4': VAPOR.keyword,
+  'editorBracketHighlight.foreground5': VAPOR.string,
+  'editorBracketHighlight.foreground6': VAPOR.func,
+  'editorBracketMatch.border': VAPOR.accent,
+  'editorBracketMatch.background': '#ff3fd822',
+};
+
+const SYNTAX_DARK: Palette = {
+  ...VAPOR,
+  bg: '#0a0d24', selection: '#2b2f6e', lineHighlight: '#121638',
+  chromeBg: '#070a1c', tabActiveBg: '#0a0d24', border: '#1f2550', hover: '#161b44',
+};
+
+const MODE13H_DARK: Palette = {
+  ...VAPOR,
+  bg: '#1a0b2e', selection: '#3d1f66', lineHighlight: '#24123f', lineNumber: '#6a5a9a',
+  chromeBg: '#13082a', tabActiveBg: '#1a0b2e', border: '#4a2a7a', hover: '#2a1748',
+};
+
+SCHEMES_DATA.push(
+  { id: 'syntax', label: 'Syntax', light: SYNTAX_DARK, dark: SYNTAX_DARK, darkOnly: true, extraRules: VAPOR_RULES, extraColors: VAPOR_COLORS },
+  {
+    id: 'mode13h',
+    label: 'Mode 13h',
+    light: MODE13H_DARK,
+    dark: MODE13H_DARK,
+    darkOnly: true,
+    extraRules: VAPOR_RULES,
+    extraColors: VAPOR_COLORS,
+    effects: { crt: true, cursorStyle: 'block', fontFamily: "'VT323', 'Cascadia Code', Consolas, monospace", fontSizeDelta: 4 },
+  },
+);
+
 export const SCHEMES: readonly Scheme[] = SCHEMES_DATA;
+
+/** The mode a scheme actually renders in. */
+export function schemeMode(scheme: Scheme, mode: Mode): Mode {
+  return scheme.darkOnly ? 'dark' : mode;
+}
 
 export function getScheme(id: string): Scheme {
   return SCHEMES.find((s) => s.id === id) ?? SCHEMES[0];
@@ -214,7 +298,12 @@ export function monacoThemeName(schemeId: string, mode: Mode): string {
 
 const hex = (c: string) => c.replace('#', '');
 
-export function toMonacoTheme(p: Palette, mode: Mode): Monaco.editor.IStandaloneThemeData {
+export function toMonacoTheme(
+  p: Palette,
+  mode: Mode,
+  extraRules: Monaco.editor.ITokenThemeRule[] = [],
+  extraColors: Record<string, string> = {},
+): Monaco.editor.IStandaloneThemeData {
   return {
     base: mode === 'dark' ? 'vs-dark' : 'vs',
     inherit: true,
@@ -248,6 +337,7 @@ export function toMonacoTheme(p: Palette, mode: Mode): Monaco.editor.IStandalone
       { token: 'key', foreground: hex(p.attribute) },
       { token: 'string.key.json', foreground: hex(p.attribute) },
       { token: 'string.value.json', foreground: hex(p.string) },
+      ...extraRules,
     ],
     colors: {
       'editor.background': p.bg,
@@ -266,6 +356,7 @@ export function toMonacoTheme(p: Palette, mode: Mode): Monaco.editor.IStandalone
       'diffEditor.insertedLineBackground': p.diffInsert,
       'diffEditor.removedLineBackground': p.diffRemove,
       focusBorder: p.accent,
+      ...extraColors,
     },
   };
 }
@@ -283,5 +374,6 @@ export function cssVars(p: Palette): Record<string, string> {
     '--accent': p.accent,
     '--hover': p.hover,
     '--selection': p.selection,
+    ...(p.moduleName ? { '--module-name': p.moduleName } : {}),
   };
 }

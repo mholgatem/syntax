@@ -42,7 +42,10 @@ text editor. It runs entirely in your browser (files are never uploaded) and is 
   downloads the file. Save As, Save All, and **Download All as ZIP** are also available.
 - **Encodings & line endings**: UTF-8, UTF-8 BOM and UTF-16 LE/BE are detected on open and kept on save. You can convert CRLF ↔ LF.
 - **Themes**: Light / Dark / Match System, and 7 color schemes (Default, Classic / Obsidian, Solarized, GitHub, One,
-  Gruvbox, Vivid), each with a light and a dark variant.
+  Gruvbox, Vivid), each with a light and a dark variant. Plus two dark-only vaporwave schemes:
+  - **Syntax**: neon colors on deep blue, with module and entity names highlighted.
+  - **Mode 13h**: the same colors on deep purple, styled as a DOS editor on a CRT, with a pixel font, block cursor,
+    scan-lines and a soft glow.
 - **Safety net**: unsaved tabs are marked. Closing a modified tab asks to save, and leaving the page with
   unsaved changes prompts first. Open tabs, including unsaved edits, are kept in the browser's IndexedDB and
   restored after a reload or crash, along with bookmarks and the split layout. (Undo history is not kept across reloads.)
@@ -119,3 +122,8 @@ and shows an unstyled page with 404s. The workflow checks this setting first and
 
 The service worker caches the app for offline use. After a deploy, open pages pick up the new version on their next
 load and show a *New version available → Reload* prompt.
+
+## Credits
+
+Mode 13h uses [VT323](https://fonts.google.com/specimen/VT323) by Peter Hull, licensed under the
+SIL Open Font License 1.1 (see `public/fonts/VT323-LICENSE.txt`).

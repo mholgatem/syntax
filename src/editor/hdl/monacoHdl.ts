@@ -3,7 +3,7 @@ import { store, type Doc } from '../../state/documents';
 import { settings } from '../../state/settings';
 import { pickOne, toast } from '../../ui/dialogs';
 import { hdlLang, type HdlLang } from './lex';
-import { INSTANTIABLE, parseHdl, symbolPathAt, walkSymbols, type HdlKind, type HdlSymbol } from './symbols';
+import { INSTANTIABLE, moduleNameRanges, parseHdl, symbolPathAt, walkSymbols, type HdlKind, type HdlSymbol } from './symbols';
 import { instanceTemplate } from './instance';
 import { alignLines, blockAround } from './align';
 
@@ -29,6 +29,37 @@ export function symbolsFor(model: Model): HdlSymbol[] | null {
   const symbols = model.getValueLength() > MAX_PARSE_CHARS ? [] : parseHdl(model.getValue(), lang);
   cache.set(model, { version, lang, symbols });
   return symbols;
+}
+
+/**
+ * Mark module / entity names with the `hdl-module-name` class. Only color schemes that
+ * define a module-name color style it (app.css, :root[data-module-names]).
+ */
+export function attachModuleNameDecorations(ed: Editor): void {
+  const decorations = ed.createDecorationsCollection();
+  let timer = 0;
+  const update = () => {
+    window.clearTimeout(timer);
+    const model = ed.getModel();
+    const symbols = model ? symbolsFor(model) : null;
+    if (!model || !symbols) {
+      decorations.clear();
+      return;
+    }
+    decorations.set(
+      moduleNameRanges(symbols, model.getValue()).map((r) => ({
+        range: rangeOf(model, r.start, r.end),
+        options: { inlineClassName: 'hdl-module-name' },
+      })),
+    );
+  };
+  ed.onDidChangeModel(update);
+  ed.onDidChangeModelLanguage(update);
+  ed.onDidChangeModelContent(() => {
+    window.clearTimeout(timer);
+    timer = window.setTimeout(update, 150);
+  });
+  update();
 }
 
 export function rangeOf(model: Model, start: number, end: number): monaco.Range {

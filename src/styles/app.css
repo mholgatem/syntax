@@ -1239,3 +1239,173 @@ table.shortcuts kbd {
 .script-steps .muted {
   color: var(--muted);
 }
+.unblock-warning {
+  margin: 4px 0 14px;
+  padding: 10px 12px 4px;
+  color: var(--fg);
+  background: color-mix(in srgb, var(--danger) 12%, var(--bg));
+  border: 2px solid var(--danger);
+  border-left-width: 6px;
+  border-radius: 6px;
+}
+.unblock-warning .unblock-title {
+  margin: 0 0 6px;
+  color: var(--danger);
+  font-size: 15px;
+  font-weight: 700;
+}
+.unblock-warning .codicon {
+  vertical-align: -3px;
+}
+.modal-footer-extra {
+  margin-right: auto;
+}
+.splash-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #a49dbd;
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+.splash-check input {
+  margin: 0;
+  accent-color: #ff3fd8;
+}
+.modal-buttons {
+  align-items: center;
+}
+.script-steps .then {
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+.script-steps kbd {
+  padding: 0 4px;
+  font: 0.92em 'Cascadia Code', Consolas, monospace;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg);
+}
+
+/* ---------- color schemes: module names, "Mode 13h" CRT ---------- */
+@font-face {
+  font-family: 'VT323';
+  src: url('/fonts/vt323-latin-400.woff2') format('woff2');
+  font-display: swap;
+}
+/* HDL module / entity names (decorations from hdl/monacoHdl.ts), for schemes that color them. */
+:root[data-module-names] .monaco-editor .hdl-module-name {
+  color: var(--module-name) !important;
+}
+
+/* Mode 13h: an old DOS editor on a CRT. Same layout, retro accents. */
+:root[data-scheme='mode13h'] {
+  --m13-pink: #ff3fd8;
+  --m13-cyan: #3ee6ff;
+  --m13-ink: #1a0b2e;
+  --m13-font: 'VT323', 'Cascadia Code', Consolas, monospace;
+}
+:root[data-scheme='mode13h'] #menubar,
+:root[data-scheme='mode13h'] .tabbar,
+:root[data-scheme='mode13h'] #statusbar,
+:root[data-scheme='mode13h'] #sidebar,
+:root[data-scheme='mode13h'] .menu-popup {
+  font-family: var(--m13-font);
+  font-size: 18px;
+  letter-spacing: 0.02em;
+}
+/* Chrome text sets many small sizes; VT323 needs one larger size throughout (icons excluded). */
+:root[data-scheme='mode13h'] :is(#menubar, .tabbar, #statusbar, #sidebar, .menu-popup) :not(.codicon) {
+  font-family: inherit;
+  font-size: inherit;
+}
+:root[data-scheme='mode13h'] #menubar {
+  background: linear-gradient(180deg, #c3b2ef, #8f7cc9);
+  border-bottom-color: var(--m13-ink);
+}
+:root[data-scheme='mode13h'] .menubar-item {
+  color: var(--m13-ink);
+}
+:root[data-scheme='mode13h'] .menubar-item:hover,
+:root[data-scheme='mode13h'] .menubar-item.open {
+  color: #fff;
+  background: var(--m13-ink);
+}
+:root[data-scheme='mode13h'] .tab {
+  border-right-color: transparent;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--m13-pink) 35%, transparent);
+}
+:root[data-scheme='mode13h'] .tab.active {
+  color: var(--m13-ink);
+  background: var(--m13-pink);
+}
+:root[data-scheme='mode13h'] .tab.active::before,
+:root[data-scheme='mode13h'] .tab.active::after {
+  display: none;
+}
+:root[data-scheme='mode13h'] .tab.active .tab-close {
+  color: var(--m13-ink);
+}
+/* Panel frames: pink around the editor views, cyan around the side panel. */
+:root[data-scheme='mode13h'] .pane-body::after {
+  /* drawn over the editor, which would paint over a border or outline */
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  border: 1px solid var(--m13-pink);
+}
+:root[data-scheme='mode13h'] #sidebar {
+  outline: 1px solid var(--m13-cyan);
+  outline-offset: -1px;
+}
+:root[data-scheme='mode13h'] .tree-row.current {
+  background: var(--m13-cyan);
+}
+:root[data-scheme='mode13h'] .tree-row.current .tree-name,
+:root[data-scheme='mode13h'] .tree-row.current .tree-detail,
+:root[data-scheme='mode13h'] .tree-row.current .tree-icon,
+:root[data-scheme='mode13h'] .tree-row.current .tree-twisty {
+  color: var(--m13-ink);
+  text-shadow: none;
+}
+
+/* CRT: subtle glow on text, scan-lines and a vignette over the whole window. */
+:root[data-crt] .monaco-editor .view-lines span {
+  text-shadow:
+    0 0 1px currentColor,
+    0 0 7px color-mix(in srgb, currentColor 40%, transparent);
+}
+:root[data-crt] .monaco-editor .cursor {
+  box-shadow: 0 0 8px var(--accent);
+}
+:root[data-crt] .tabbar,
+:root[data-crt] #statusbar,
+:root[data-crt] #sidebar,
+:root[data-crt] .menu-popup {
+  text-shadow: 0 0 6px color-mix(in srgb, currentColor 35%, transparent);
+}
+:root[data-crt] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(to bottom, rgb(0 0 0 / 0.2) 0 1px, transparent 1px 3px),
+    radial-gradient(ellipse at center, transparent 62%, rgb(0 0 0 / 0.35) 100%);
+}
+@media (prefers-contrast: more) {
+  :root[data-crt] body::after {
+    display: none;
+  }
+  :root[data-crt] .monaco-editor .view-lines span,
+  :root[data-crt] .tabbar,
+  :root[data-crt] #statusbar,
+  :root[data-crt] #sidebar,
+  :root[data-crt] .menu-popup {
+    text-shadow: none;
+  }
+}

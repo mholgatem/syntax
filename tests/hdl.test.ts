@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { stripCode, hdlLang } from '../src/editor/hdl/lex';
-import { parseHdl, symbolPathAt, walkSymbols, type HdlSymbol } from '../src/editor/hdl/symbols';
+import { moduleNameRanges, parseHdl, symbolPathAt, walkSymbols, type HdlSymbol } from '../src/editor/hdl/symbols';
 import { instanceTemplate } from '../src/editor/hdl/instance';
 import { alignLines, blockAround } from '../src/editor/hdl/align';
 
@@ -314,5 +314,42 @@ describe('align statements', () => {
     expect(blockAround(lines, 1, 'verilog')).toEqual([0, 1]);
     expect(blockAround(lines, 3, 'verilog')).toBeNull();
     expect(blockAround(lines, 2, 'verilog')).toBeNull();
+  });
+});
+
+describe('moduleNameRanges', () => {
+  const names = (text: string, lang: 'verilog' | 'vhdl') =>
+    moduleNameRanges(parseHdl(text, lang), text).map((r) => `${r.start}:${text.slice(r.start, r.end)}`);
+
+  it('finds Verilog module declarations and instantiated modules', () => {
+    const src = [
+      'module top;',
+      '  alu #(.W(8)) u_alu (.a(a));',
+      '  fifo f0 (.clk(clk));',
+      'endmodule',
+      'module alu; endmodule',
+      '',
+    ].join('\n');
+    expect(names(src, 'verilog')).toEqual([
+      `${src.indexOf('top')}:top`,
+      `${src.indexOf('alu')}:alu`,
+      `${src.indexOf('fifo')}:fifo`,
+      `${src.lastIndexOf('alu')}:alu`,
+    ]);
+  });
+
+  it('finds VHDL entities and entity instances', () => {
+    const src = [
+      'entity alu is',
+      'end entity;',
+      'architecture rtl of top is',
+      'begin',
+      '  u0: entity work.alu port map (a => a);',
+      'end architecture;',
+      '',
+    ].join('\n');
+    const r = names(src, 'vhdl');
+    expect(r[0]).toBe(`${src.indexOf('alu')}:alu`);
+    expect(r).toContain(`${src.lastIndexOf('alu')}:alu`);
   });
 });

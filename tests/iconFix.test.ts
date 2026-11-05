@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { BACKUP_KEY, ICON_FILE, buildIco, fixIconsScript, toBase64, undoIconsScript } from '../src/io/iconFix';
+import { strFromU8, unzipSync } from 'fflate';
+import {
+  BACKUP_KEY,
+  FIX_SCRIPT_NAME,
+  ICON_FILE,
+  INSTRUCTIONS_NAME,
+  UNDO_SCRIPT_NAME,
+  ZIP_NAME,
+  buildIco,
+  buildIconScriptsZip,
+  fixIconsScript,
+  toBase64,
+  undoIconsScript,
+} from '../src/io/iconFix';
 
 const fakePng = (n: number, fill: number) => new Uint8Array(n).fill(fill);
 
@@ -62,5 +75,27 @@ describe('icon scripts', () => {
     expect(scripts.undo).toContain(`$BackupKey = '${BACKUP_KEY}'`);
     expect(scripts.undo).toContain(ICON_FILE);
     expect(scripts.undo).not.toContain('$IconData');
+  });
+});
+
+describe('icon scripts zip', () => {
+  const b64 = toBase64(buildIco([{ size: 16, png: fakePng(40, 7) }]));
+  const files = unzipSync(buildIconScriptsZip(b64));
+  const text = (name: string) => strFromU8(files[name]);
+
+  it('contains both scripts and the instructions', () => {
+    expect(Object.keys(files).sort()).toEqual([FIX_SCRIPT_NAME, INSTRUCTIONS_NAME, UNDO_SCRIPT_NAME].sort());
+    expect(text(FIX_SCRIPT_NAME)).toBe(fixIconsScript(b64));
+    expect(text(UNDO_SCRIPT_NAME)).toBe(undoIconsScript());
+  });
+
+  it('instructions cover unblocking and the dry run, in ASCII with CRLF', () => {
+    const t = text(INSTRUCTIONS_NAME);
+    expect(/^[\x09\x0a\x0d\x20-\x7e]*$/.test(t)).toBe(true);
+    expect(/[^\r]\n/.test(t)).toBe(false);
+    expect(t).toContain('Unblock');
+    expect(t).toContain(`powershell -ExecutionPolicy Bypass -File .\${FIX_SCRIPT_NAME} -DryRun`);
+    expect(t).toContain(`powershell -ExecutionPolicy Bypass -File .\${UNDO_SCRIPT_NAME} -DryRun`);
+    expect(t).toContain(ZIP_NAME);
   });
 });

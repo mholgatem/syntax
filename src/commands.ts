@@ -1,7 +1,7 @@
 import { store, type Doc, type PaneIndex } from './state/documents';
 import { settings } from './state/settings';
 import { clearRecent, forgetRecent, recentFiles, recentSupported, type RecentEntry } from './state/recent';
-import { SCHEMES } from './editor/themes';
+import { SCHEMES, getScheme } from './editor/themes';
 import {
   clearBookmarks,
   copyBookmarkedLines,
@@ -33,7 +33,7 @@ import { showSidebarTab } from './ui/sidebar';
 import { openSearchPanel } from './ui/searchPanel';
 import { canInstall, promptInstall } from './pwa';
 import { isMarkdown } from './ui/markdownPreview';
-import { downloadIconScript, isWindows } from './ui/iconNotice';
+import { downloadIconScripts, isWindows } from './ui/iconNotice';
 
 let fileInput: HTMLInputElement;
 export function setFileInput(input: HTMLInputElement): void {
@@ -196,7 +196,14 @@ export function toggleMarkdownPreview(): void {
   if (on && !store.docs.some(isMarkdown)) toast('The preview appears beside Markdown files.');
 }
 
+const darkOnlyScheme = () => (getScheme(settings.get().scheme).darkOnly ? getScheme(settings.get().scheme) : undefined);
+
 export function toggleDarkMode(): void {
+  const fixed = darkOnlyScheme();
+  if (fixed) {
+    toast(`${fixed.label} is a dark-only color scheme.`);
+    return;
+  }
   const { mode } = settings.get();
   const dark = mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   settings.update({ mode: dark ? 'light' : 'dark' });
@@ -419,12 +426,20 @@ export function buildMenus(): Menu[] {
       items: () => [
         {
           label: 'Appearance',
-          submenu: () =>
-            (['system', 'light', 'dark'] as const).map((m) => ({
-              label: m === 'system' ? 'Match System' : m === 'light' ? 'Light' : 'Dark',
-              checked: () => settings.get().mode === m,
-              action: () => settings.update({ mode: m }),
-            })),
+          submenu: (): MenuItem[] => {
+            const fixed = darkOnlyScheme();
+            return [
+              ...(fixed
+                ? ([{ label: `${fixed.label} is dark-only`, action: () => undefined, disabled: () => true }, 'separator'] as MenuItem[])
+                : []),
+              ...(['system', 'light', 'dark'] as const).map((m) => ({
+                label: m === 'system' ? 'Match System' : m === 'light' ? 'Light' : 'Dark',
+                checked: () => settings.get().mode === m,
+                disabled: () => !!fixed,
+                action: () => settings.update({ mode: m }),
+              })),
+            ];
+          },
         },
         {
           label: 'Color Scheme',
@@ -457,8 +472,9 @@ export function buildMenus(): Menu[] {
         ...(isWindows()
           ? ([
               'separator',
-              { label: 'Fix-icons script', action: () => void downloadIconScript('fix') },
-              { label: 'Undo-icons script', action: () => void downloadIconScript('undo') },
+              // Both download the same zip (fix + undo scripts and instructions).
+              { label: 'Fix-icons script', action: () => void downloadIconScripts() },
+              { label: 'Undo-icons script', action: () => void downloadIconScripts() },
             ] as MenuItem[])
           : []),
         'separator',

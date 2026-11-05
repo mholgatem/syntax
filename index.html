@@ -13,7 +13,7 @@
       // Pick the initial chrome colors before CSS loads, to avoid a flash of the wrong theme.
       try {
         var s = JSON.parse(localStorage.getItem('syntax.settings.v1') || '{}');
-        var dark = s.mode === 'dark' || ((!s.mode || s.mode === 'system') && matchMedia('(prefers-color-scheme: dark)').matches);
+        var dark = s.scheme === 'syntax' || s.scheme === 'mode13h' || s.mode === 'dark' || ((!s.mode || s.mode === 'system') && matchMedia('(prefers-color-scheme: dark)').matches);
         document.documentElement.dataset.theme = dark ? 'dark' : 'light';
       } catch (e) {}
     </script>

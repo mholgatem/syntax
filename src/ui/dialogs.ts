@@ -21,6 +21,8 @@ function openModal<T>(opts: {
   className?: string;
   /** Image shown across the top of the dialog, above the title. */
   banner?: string;
+  /** Shown at the left of the button row (e.g. a "don't show again" checkbox). */
+  footerExtra?: HTMLElement;
   /** Called on Enter / primary button; may return a different value (e.g. input contents). */
   resolvePrimary?: () => T;
 }): Promise<T> {
@@ -54,6 +56,10 @@ function openModal<T>(opts: {
 
     const footer = document.createElement('div');
     footer.className = 'modal-buttons';
+    if (opts.footerExtra) {
+      opts.footerExtra.classList.add('modal-footer-extra');
+      footer.append(opts.footerExtra);
+    }
     dialog.append(footer);
 
     const close = (value: T) => {
@@ -284,6 +290,7 @@ export function showSplash<T>(opts: {
   body: HTMLElement;
   buttons: ButtonSpec<T>[];
   cancelValue: T;
+  footerExtra?: HTMLElement;
 }): Promise<T> {
   return openModal({ ...opts, className: 'splash' });
 }

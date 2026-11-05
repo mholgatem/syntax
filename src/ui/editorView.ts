@@ -4,7 +4,8 @@ import { settings, type Settings } from '../state/settings';
 import { installRichCopy } from '../editor/richCopy';
 import { registerWordCompletion } from '../editor/wordCompletion';
 import { attachBookmarkGutter } from '../editor/bookmarks';
-import { attachAutoAlign, initHdlFeatures } from '../editor/hdl/monacoHdl';
+import { attachAutoAlign, attachModuleNameDecorations, initHdlFeatures } from '../editor/hdl/monacoHdl';
+import { getScheme } from '../editor/themes';
 
 // Two code editors (left and right view, Notepad++ style) shared by every tab: each tab
 // owns a model, and so its own undo stack. A cloned tab shows the same model in both
@@ -21,9 +22,14 @@ const viewStates = new Map<string, ViewState>();
 let compare: { left: string; right: string } | null = null;
 const compareListeners = new Set<() => void>();
 
+const DEFAULT_FONT = "'Cascadia Code', 'JetBrains Mono', Consolas, 'Courier New', monospace";
+
 function editorOptions(s: Settings): monaco.editor.IEditorOptions & monaco.editor.IGlobalEditorOptions {
+  const fx = getScheme(s.scheme).effects ?? {};
   return {
-    fontSize: s.fontSize,
+    fontSize: s.fontSize + (fx.fontSizeDelta ?? 0),
+    fontFamily: fx.fontFamily ?? DEFAULT_FONT,
+    cursorStyle: fx.cursorStyle ?? 'line',
     wordWrap: s.wordWrap ? 'on' : 'off',
     renderWhitespace: s.renderWhitespace ? 'all' : 'selection',
     minimap: { enabled: s.minimap },
@@ -42,7 +48,6 @@ function createCodeEditor(host: HTMLElement, s: Settings): monaco.editor.IStanda
     ...editorOptions(s),
     model: null,
     automaticLayout: true,
-    fontFamily: "'Cascadia Code', 'JetBrains Mono', Consolas, 'Courier New', monospace",
     fontLigatures: false,
     renderLineHighlight: 'all',
     smoothScrolling: true,
@@ -62,6 +67,7 @@ function createCodeEditor(host: HTMLElement, s: Settings): monaco.editor.IStanda
   });
   attachBookmarkGutter(ed);
   attachAutoAlign(ed);
+  attachModuleNameDecorations(ed);
   return ed;
 }
 
@@ -87,9 +93,22 @@ export function initEditors(hosts: [HTMLElement, HTMLElement], diffHost: HTMLEle
   for (const side of [diffEditor.getOriginalEditor(), diffEditor.getModifiedEditor()]) {
     attachBookmarkGutter(side);
     attachAutoAlign(side);
+    attachModuleNameDecorations(side);
   }
 
+  // Monaco measures character widths once per font. A web font (Mode 13h's VT323) may
+  // still be loading when it's first used, so measure again once it's ready.
+  let measuredFont = '';
+  const remeasureWhenLoaded = (s: Settings) => {
+    const family = getScheme(s.scheme).effects?.fontFamily;
+    if (!family || family === measuredFont) return;
+    measuredFont = family;
+    void document.fonts.load(`16px ${family}`).then(() => monaco.editor.remeasureFonts());
+  };
+  remeasureWhenLoaded(s);
+
   settings.subscribe((next) => {
+    remeasureWhenLoaded(next);
     for (const ed of editors) ed.updateOptions(editorOptions(next));
     diffEditor.updateOptions({
       ...editorOptions(next),
