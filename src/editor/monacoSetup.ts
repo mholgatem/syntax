@@ -37,8 +37,8 @@ monaco.languages.setLanguageConfiguration('vhdl', vhdlConfiguration);
 monaco.languages.setMonarchTokensProvider('vhdl', vhdlLanguage);
 
 for (const scheme of SCHEMES) {
-  monaco.editor.defineTheme(monacoThemeName(scheme.id, 'light'), toMonacoTheme(scheme.light, 'light'));
-  monaco.editor.defineTheme(monacoThemeName(scheme.id, 'dark'), toMonacoTheme(scheme.dark, 'dark'));
+  monaco.editor.defineTheme(monacoThemeName(scheme.id, 'light'), toMonacoTheme(scheme.light, 'light', scheme.extraRules, scheme.extraColors));
+  monaco.editor.defineTheme(monacoThemeName(scheme.id, 'dark'), toMonacoTheme(scheme.dark, 'dark', scheme.extraRules, scheme.extraColors));
 }
 
 // Ctrl+D duplicates the current line (or selected lines) below, as in Notepad++,
