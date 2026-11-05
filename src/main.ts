@@ -24,6 +24,7 @@ import { initOutline } from './ui/outline';
 import { initSearchPanel, openSearchPanel } from './ui/searchPanel';
 import { initPwa } from './pwa';
 import { initMarkdownPreview } from './ui/markdownPreview';
+import { maybeShowIconNotice } from './ui/iconNotice';
 import {
   buildMenus,
   closeDoc,
@@ -289,6 +290,7 @@ async function main(): Promise<void> {
   store.subscribe(syncTitle);
   syncTitle();
   document.body.classList.add('ready');
+  void maybeShowIconNotice();
 }
 
 void main();

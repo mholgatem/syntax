@@ -26,6 +26,8 @@ export interface Settings {
   markdownPreview: boolean;
   /** Width of the editor beside the markdown preview, as a fraction of the view. */
   previewRatio: number;
+  /** The installed-app welcome splash (file icon notice) has been shown. */
+  iconNoticeSeen: boolean;
 }
 
 export type SidebarTab = 'outline' | 'search';
@@ -49,6 +51,7 @@ export const DEFAULT_SETTINGS: Settings = {
   splitRatio: 0.5,
   markdownPreview: false,
   previewRatio: 0.5,
+  iconNoticeSeen: false,
 };
 
 const KEY = 'syntax.settings.v1';

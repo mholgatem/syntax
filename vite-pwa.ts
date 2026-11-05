@@ -2,7 +2,7 @@ import { readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { createHash } from 'node:crypto';
 import type { Plugin } from 'vite';
-import { LANGUAGES } from './src/editor/languages';
+import { fileHandlerAccept } from './src/editor/languages';
 
 // Makes the build an installable, offline-capable app (PWA) without extra dependencies:
 //  - emits manifest.webmanifest, including file handlers so the installed app shows up in
@@ -75,7 +75,6 @@ export function pwa(): Plugin {
       ];
     },
     generateBundle(_options, bundle) {
-      const extensions = [...new Set(LANGUAGES.flatMap((l) => l.extensions))].sort();
       const manifest = {
         name: 'Syntax',
         short_name: 'Syntax',
@@ -96,7 +95,9 @@ export function pwa(): Plugin {
         file_handlers: [
           {
             action: base,
-            accept: { 'text/plain': extensions },
+            // One MIME type per language family. Kept as a single handler so the browser
+            // registers a single file-type entry (which the fix-icons script then updates).
+            accept: fileHandlerAccept(),
             // The icon the OS shows on files associated with the installed app. Without it,
             // Windows falls back to a blank page.
             icons: [
