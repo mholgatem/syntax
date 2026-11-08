@@ -1288,6 +1288,14 @@ table.shortcuts kbd {
   background: var(--bg);
 }
 
+/* Monaco lays out its button tooltips (find widget etc.) inside the editor pane, so near the pane's
+   right edge (minimap off + sidebar open) they shrink-wrap onto two lines. Monaco positions them for
+   one line, so the taller box covers the button, steals the pointer and flickers. Keep them on one
+   line; Monaco's own max-width (700px) still caps long ones, and the pane doesn't clip overflow. */
+.monaco-hover.workbench-hover.compact {
+  width: max-content;
+}
+
 /* ---------- color schemes: module names, "Mode 13h" CRT ---------- */
 @font-face {
   font-family: 'VT323';
