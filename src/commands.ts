@@ -187,7 +187,7 @@ function zoom(delta: number | null): void {
   settings.update({ fontSize: size });
 }
 
-type BoolSetting = 'wordWrap' | 'renderWhitespace' | 'minimap' | 'lineNumbers' | 'diffInline' | 'diffIgnoreWhitespace' | 'autoAlign';
+type BoolSetting = 'wordWrap' | 'renderWhitespace' | 'minimap' | 'lineNumbers' | 'diffInline' | 'diffIgnoreWhitespace' | 'autoAlign' | 'autoEnd';
 const toggle = (key: BoolSetting) => settings.update({ [key]: !settings.get()[key] });
 
 export function toggleMarkdownPreview(): void {
@@ -468,6 +468,11 @@ export function buildMenus(): Menu[] {
           label: 'Auto-Align on Enter (Verilog / VHDL)',
           checked: () => settings.get().autoAlign,
           action: () => toggle('autoAlign'),
+        },
+        {
+          label: 'Auto-Insert End on Enter (Verilog / SV)',
+          checked: () => settings.get().autoEnd,
+          action: () => toggle('autoEnd'),
         },
         ...(isWindows()
           ? ([

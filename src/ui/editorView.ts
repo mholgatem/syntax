@@ -4,7 +4,7 @@ import { settings, type Settings } from '../state/settings';
 import { installRichCopy } from '../editor/richCopy';
 import { registerWordCompletion } from '../editor/wordCompletion';
 import { attachBookmarkGutter } from '../editor/bookmarks';
-import { attachAutoAlign, attachModuleNameDecorations, initHdlFeatures } from '../editor/hdl/monacoHdl';
+import { attachAutoAlign, attachAutoEnd, attachModuleNameDecorations, initHdlFeatures } from '../editor/hdl/monacoHdl';
 import { getScheme } from '../editor/themes';
 
 // Two code editors (left and right view, Notepad++ style) shared by every tab: each tab
@@ -67,6 +67,7 @@ function createCodeEditor(host: HTMLElement, s: Settings): monaco.editor.IStanda
   });
   attachBookmarkGutter(ed);
   attachAutoAlign(ed);
+  attachAutoEnd(ed);
   attachModuleNameDecorations(ed);
   return ed;
 }
@@ -93,6 +94,7 @@ export function initEditors(hosts: [HTMLElement, HTMLElement], diffHost: HTMLEle
   for (const side of [diffEditor.getOriginalEditor(), diffEditor.getModifiedEditor()]) {
     attachBookmarkGutter(side);
     attachAutoAlign(side);
+    attachAutoEnd(side);
     attachModuleNameDecorations(side);
   }
 

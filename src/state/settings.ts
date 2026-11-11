@@ -14,6 +14,8 @@ export interface Settings {
   diffIgnoreWhitespace: boolean;
   /** Realign `=`, `<=`, `=>`… blocks in HDL files when Enter is pressed. */
   autoAlign: boolean;
+  /** Add the matching `end…` after Enter on a Verilog / SV block opener (`begin`, `case`…). */
+  autoEnd: boolean;
   /** Indentation for new files and files whose indentation can't be detected. */
   defaultTabSize: number;
   defaultInsertSpaces: boolean;
@@ -43,6 +45,7 @@ export const DEFAULT_SETTINGS: Settings = {
   diffInline: false,
   diffIgnoreWhitespace: false,
   autoAlign: false,
+  autoEnd: false,
   defaultTabSize: 4,
   defaultInsertSpaces: true,
   sidebarOpen: false,
