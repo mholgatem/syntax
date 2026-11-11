@@ -3,6 +3,7 @@ import { stripCode, hdlLang } from '../src/editor/hdl/lex';
 import { moduleNameRanges, parseHdl, symbolPathAt, walkSymbols, type HdlSymbol } from '../src/editor/hdl/symbols';
 import { instanceTemplate } from '../src/editor/hdl/instance';
 import { alignLines, blockAround } from '../src/editor/hdl/align';
+import { autoEndFor } from '../src/editor/hdl/autoEnd';
 
 const names = (syms: HdlSymbol[], kind?: string) => syms.filter((s) => !kind || s.kind === kind).map((s) => s.name);
 const find = (syms: HdlSymbol[], name: string) => {
@@ -235,8 +236,12 @@ describe('instance template', () => {
   it('builds a Verilog instance with aligned named connections', () => {
     const m = parseHdl('module fifo #(parameter W = 8, localparam L = 2) (input clk, input [W-1:0] din, output full); endmodule', 'verilog')[0];
     expect(instanceTemplate(m, 'verilog')).toBe(
-      ['fifo #(', '  .W    (W)', ') u_fifo (', '  .clk  (clk),', '  .din  (din),', '  .full (full)', ');'].join('\n'),
+      ['fifo #(.W(W)) u_fifo (', '  .clk  (clk),', '  .din  (din),', '  .full (full)', ');'].join('\n'),
     );
+  });
+  it('keeps every Verilog parameter on the header line', () => {
+    const m = parseHdl('module ram #(parameter DEPTH = 16, WIDTH = 8) (input clk); endmodule', 'verilog')[0];
+    expect(instanceTemplate(m, 'verilog')).toBe(['ram #(.DEPTH(DEPTH), .WIDTH(WIDTH)) u_ram (', '  .clk (clk)', ');'].join('\n'));
   });
   it('handles modules with no parameters or ports', () => {
     const m = parseHdl('module top; endmodule', 'verilog')[0];
@@ -351,5 +356,50 @@ describe('moduleNameRanges', () => {
     const r = names(src, 'vhdl');
     expect(r[0]).toBe(`${src.indexOf('alu')}:alu`);
     expect(r).toContain(`${src.lastIndexOf('alu')}:alu`);
+  });
+});
+
+describe('auto end', () => {
+  /** `|` marks the cursor. */
+  const at = (src: string) => {
+    const cursor = src.indexOf('|');
+    const text = src.slice(0, cursor) + src.slice(cursor + 1);
+    return autoEndFor(text, text.lastIndexOf('\n', cursor - 1) + 1, cursor);
+  };
+  it('closes block openers at the end of the line', () => {
+    expect(at('case (load)|')).toBe('endcase');
+    expect(at('  unique casez (sel[3:0])|')).toBe('endcase');
+    expect(at('always @(posedge clk) begin|')).toBe('end');
+    expect(at('if (a) begin : blk|')).toBe('end');
+    expect(at('module m;|')).toBe('endmodule');
+    expect(at('module m #(parameter W = 8) (input clk);|')).toBe('endmodule');
+    expect(at('fork|')).toBe('join');
+    expect(at('virtual class c;|')).toBe('endclass');
+    expect(at('function automatic int f(int x);|')).toBe('endfunction');
+    expect(at('covergroup cg @(posedge clk);|')).toBe('endgroup');
+    expect(at('generate|')).toBe('endgenerate');
+  });
+  it('handles `end else begin` inside an unbalanced block', () => {
+    expect(at('always begin\n  if (a) begin\n  end else begin|\nend')).toBe('end');
+  });
+  it('does nothing when the block is already closed', () => {
+    expect(at('always begin|\nend')).toBeNull();
+    expect(at('case (x)|\nendcase')).toBeNull();
+    expect(at('module m;|\nendmodule')).toBeNull();
+  });
+  it('ignores the cursor mid-line, comments, strings and bodiless headers', () => {
+    expect(at('begin| x')).toBeNull();
+    expect(at('a = 1; // begin|')).toBeNull();
+    expect(at('$display("begin");|')).toBeNull();
+    expect(at('extern function void f();|')).toBeNull();
+    expect(at('pure virtual task t();|')).toBeNull();
+    expect(at('import "DPI-C" function int c_f(int a);|')).toBeNull();
+    expect(at('typedef class c;|')).toBeNull();
+    expect(at('virtual interface bus_if vif;|')).toBeNull();
+    expect(at('wait fork;|')).toBeNull();
+    expect(at('assert property (p_ok);|')).toBeNull();
+    expect(at('module m (|')).toBeNull();
+    expect(at('case (x) 1: y = 0;|')).toBeNull();
+    expect(at('begin end|')).toBeNull();
   });
 });

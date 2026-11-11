@@ -12,11 +12,11 @@ export function instanceTemplate(unit: HdlSymbol, lang: HdlLang, indent = '  '):
   const inst = `u_${unit.name}`;
 
   if (lang === 'verilog') {
-    const w = Math.max(0, ...params.map((p) => p.name.length), ...ports.map((p) => p.name.length)) + 1;
+    // Parameters stay on the header line; only the ports are stacked.
+    const w = Math.max(0, ...ports.map((p) => p.name.length)) + 1;
     const conn = (names: string[]) => names.map((n, i) => `${indent}.${pad(n, w)}(${n})${i < names.length - 1 ? ',' : ''}`);
-    const lines: string[] = [];
-    if (params.length) lines.push(`${unit.name} #(`, ...conn(params.map((p) => p.name)), `) ${inst} (`);
-    else lines.push(`${unit.name} ${inst} (`);
+    const paramList = params.map((p) => `.${p.name}(${p.name})`).join(', ');
+    const lines = [params.length ? `${unit.name} #(${paramList}) ${inst} (` : `${unit.name} ${inst} (`];
     if (ports.length === 0) {
       lines[lines.length - 1] += ');';
       return lines.join('\n');

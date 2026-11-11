@@ -1,7 +1,8 @@
 import { store } from '../state/documents';
 import { languageLabel } from '../editor/languages';
-import { rangeOf, symbolsFor } from '../editor/hdl/monacoHdl';
-import { symbolPathAt, type HdlKind, type HdlSymbol } from '../editor/hdl/symbols';
+import { copyInstanceOf, rangeOf, symbolsFor } from '../editor/hdl/monacoHdl';
+import { INSTANTIABLE, symbolPathAt, type HdlKind, type HdlSymbol } from '../editor/hdl/symbols';
+import { showContextMenu } from './menuBar';
 import { focusedDoc, focusedEditor, getEditors, onCompareChange, revealDoc } from './editorView';
 import { isPanelVisible, registerSidebarPanel } from './sidebar';
 
@@ -150,6 +151,14 @@ export function initOutline(root: HTMLElement): void {
         }
         el.title = `${s.kind} ${s.name}${s.detail ? '  ' + s.detail : ''}`;
         el.addEventListener('click', () => revealDoc(doc, rangeOf(doc.model, s.nameStart, s.nameEnd)));
+        if (INSTANTIABLE.has(s.kind)) {
+          el.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            showContextMenu(e.clientX, e.clientY, [
+              { label: 'Copy as Instance', action: () => void copyInstanceOf(s, doc.model) },
+            ]);
+          });
+        }
         el.addEventListener('keydown', (e) => {
           if (!hasKids) return;
           if ((e.key === 'ArrowRight' && !open) || (e.key === 'ArrowLeft' && open)) {

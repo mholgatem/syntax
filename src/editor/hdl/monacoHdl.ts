@@ -6,6 +6,7 @@ import { hdlLang, type HdlLang } from './lex';
 import { INSTANTIABLE, moduleNameRanges, parseHdl, symbolPathAt, walkSymbols, type HdlKind, type HdlSymbol } from './symbols';
 import { instanceTemplate } from './instance';
 import { alignLines, blockAround } from './align';
+import { autoEndFor } from './autoEnd';
 
 // Wires the pure HDL parser / aligner into Monaco: Go to Symbol, the outline, Go to
 // Definition across open tabs, "Copy as Instance", and Align Statements (+ auto-align).
@@ -203,10 +204,17 @@ export async function copyAsInstance(ed: Editor): Promise<void> {
     toast('No module or entity found in this file.', 'error');
     return;
   }
-  const text = instanceTemplate(found.unit, found.lang, indentUnit(model));
+  await copyInstanceOf(found.unit, model);
+}
+
+/** Copy an instance of a specific unit (e.g. one picked in the outline) from `model`. */
+export async function copyInstanceOf(unit: HdlSymbol, model: Model): Promise<void> {
+  const lang = hdlLang(model.getLanguageId());
+  if (!lang) return;
+  const text = instanceTemplate(unit, lang, indentUnit(model));
   try {
     await navigator.clipboard.writeText(text);
-    toast(`Copied an instance of ${found.unit.name}`);
+    toast(`Copied an instance of ${unit.name}`);
   } catch {
     toast('Could not write to the clipboard.', 'error');
   }
@@ -318,6 +326,43 @@ export function attachAutoAlign(ed: Editor): void {
   });
 }
 
+const autoEndEditors = new Set<Editor>();
+
+/** With the Auto-Insert End setting on, Enter after `begin`, `case (x)`… adds the closer. */
+export function attachAutoEnd(ed: monaco.editor.IStandaloneCodeEditor): void {
+  autoEndEditors.add(ed);
+  const key = ed.createContextKey<boolean>('syntaxAutoEnd', false);
+  const update = () => {
+    const id = ed.getModel()?.getLanguageId();
+    key.set(settings.get().autoEnd && (id === 'verilog' || id === 'systemverilog'));
+  };
+  update();
+  settings.subscribe(update);
+  ed.onDidChangeModel(update);
+  ed.onDidChangeModelLanguage(update);
+}
+
+/** Enter in a Verilog / SV editor with Auto-Insert End on. Returns false for a plain Enter. */
+function enterWithAutoEnd(ed: Editor): boolean {
+  const model = ed.getModel();
+  const sels = ed.getSelections();
+  if (!model || !sels || sels.length !== 1 || !sels[0].isEmpty()) return false;
+  const pos = sels[0].getPosition();
+  const close = autoEndFor(model.getValue(), model.getOffsetAt({ lineNumber: pos.lineNumber, column: 1 }), model.getOffsetAt(pos));
+  if (!close) return false;
+  const indent = /^\s*/.exec(model.getLineContent(pos.lineNumber))![0];
+  const body = indent + indentUnit(model);
+  const eol = model.getEOL();
+  // Drop trailing whitespace after the cursor so the closer starts its own clean line.
+  const range = new monaco.Range(pos.lineNumber, pos.column, pos.lineNumber, model.getLineMaxColumn(pos.lineNumber));
+  ed.pushUndoStop();
+  ed.executeEdits('auto-end', [{ range, text: eol + body + eol + indent + close }], () => [
+    new monaco.Selection(pos.lineNumber + 1, body.length + 1, pos.lineNumber + 1, body.length + 1),
+  ]);
+  ed.pushUndoStop();
+  return true;
+}
+
 /** Register providers and editor actions. `reveal` opens a doc's tab and selects a range. */
 export function initHdlFeatures(reveal: (doc: Doc, selection: monaco.IRange | monaco.IPosition | undefined) => void): void {
   for (const id of HDL_LANGUAGES) {
@@ -336,6 +381,18 @@ export function initHdlFeatures(reveal: (doc: Doc, selection: monaco.IRange | mo
       reveal(doc, selectionOrPosition);
       return true;
     },
+  });
+
+  // Monaco's keybinding service is shared by every editor, so register Enter once and
+  // route it to whichever editor has focus (ed.addCommand would bind to a single editor).
+  monaco.editor.registerCommand('syntax.hdl.enterAutoEnd', () => {
+    const ed = [...autoEndEditors].find((e) => e.hasTextFocus());
+    if (ed && !enterWithAutoEnd(ed)) ed.trigger('keyboard', 'type', { text: '\n' });
+  });
+  monaco.editor.addKeybindingRule({
+    keybinding: monaco.KeyCode.Enter,
+    command: 'syntax.hdl.enterAutoEnd',
+    when: 'syntaxAutoEnd && editorTextFocus && !editorReadonly && !suggestWidgetVisible && !inSnippetMode',
   });
 
   monaco.editor.addEditorAction({
